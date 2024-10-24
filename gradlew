@@ -94,15 +94,15 @@ if [ -n "$JAVA_HOME" ] ; then
     if [ ! -x "$JAVACMD" ] ; then
         die "ERROR: JAVA_HOME is set to an invalid directory: $JAVA_HOME
 
-Please set the JAVA_HOME variable in your environment to match the
-location of your Java installation."
+Please set the JAVA_HOME variable in the environment to match the
+location of the Java installation."
     fi
 else
     JAVACMD="java"
-    which java >/dev/null 2>&1 || die "ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH.
+    which java >/dev/null 2>&1 || die "ERROR: JAVA_HOME is not set and no 'java' command could be found in the PATH.
 
-Please set the JAVA_HOME variable in your environment to match the
-location of your Java installation."
+Please set the JAVA_HOME variable in the environment to match the
+location of the Java installation."
 fi
 
 # Increase the maximum file descriptors if we can.

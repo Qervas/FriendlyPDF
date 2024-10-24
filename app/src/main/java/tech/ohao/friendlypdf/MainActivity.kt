@@ -36,6 +36,8 @@ import java.util.Timer
 import java.util.TimerTask
 import com.tom_roush.pdfbox.text.TextPosition
 import kotlinx.coroutines.delay
+import android.graphics.Color
+import android.content.res.Configuration
 
 // Make PageSize public by moving it outside the file-level scope
 data class PageSize(val width: Float, val height: Float)
@@ -66,6 +68,14 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     // Add timer related properties
     private var timeUpdateTimer: Timer? = null
     private var currentReadingIndex = 0
+
+    private var readingStartTime: Long = 0 // Add this property to the class
+    private var totalEstimatedDuration: Long = 0 // Add this property to the class
+
+    private var lastSentenceStartTime: Long = 0 // Add this property to the class
+
+    // Add to the class properties
+    private var isDarkMode = false
 
     companion object {
         private const val PREFS_NAME = "FriendlyPDFPrefs"
@@ -98,6 +108,20 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         
         // Setup FAB menu
         setupFabMenu()
+        
+        // Hide action bar immediately
+        supportActionBar?.hide()
+        
+        // Check system theme and force initial state
+        checkSystemTheme()
+        
+        // Check system theme
+        val currentNightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        isDarkMode = currentNightMode == Configuration.UI_MODE_NIGHT_YES
+        updateTheme()
+        
+        checkSystemTheme() // Check system theme on create
+        setupThemeButton()
     }
 
     private fun loadLastOpenedPDF() {
@@ -136,7 +160,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             .putString(LAST_PDF_URI, uri.toString())
             .apply()
         
-        // Your existing PDF loading code...
+        // the existing PDF loading code...
         lifecycleScope.launch {
             try {
                 // Show loading indicator
@@ -246,52 +270,24 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         Toast.makeText(this, "Mode: ${currentViewMode.name}", Toast.LENGTH_SHORT).show()
     }
 
-    private fun loadPdfWithCurrentSettings(uri: Uri, page: Int = 0) {
-        try {
-            pdfView.fromUri(uri)
-                .defaultPage(page)
-                .enableSwipe(true)
-                .swipeHorizontal(false)
-                .enableDoubletap(true)
-                .enableAnnotationRendering(true)
-                .scrollHandle(DefaultScrollHandle(this))
-                .spacing(10)
-                .apply {
-                    when (currentViewMode) {
-                        ViewMode.FIT_WIDTH -> {
-                            fitEachPage(true)  // Changed to use available methods
-                            pageFling(true)
-                            pageSnap(true)
-                            // Add extra spacing for better readability
-                            spacing(50)
-                        }
-                        ViewMode.FIT_PAGE -> {
-                            fitEachPage(true)
-                            pageFling(true)
-                            pageSnap(true)
-                            spacing(10)
-                        }
-                        ViewMode.CROP_MARGINS -> {
-                            fitEachPage(true)
-                            // Auto-crop margins
-                            autoSpacing(true)
-                            pageSnap(true)
-                            pageFling(true)
-                            // Add margin cropping if available
-                            enableAntialiasing(true)
-                        }
+    private fun loadPdfWithCurrentSettings(uri: Uri, pageNumber: Int = 0) {
+        pdfView.fromUri(uri)
+            .defaultPage(pageNumber)
+            .enableSwipe(true)
+            .swipeHorizontal(false)
+            .enableDoubletap(true)
+            .nightMode(isDarkMode)
+            .onLoad { 
+                // Force redraw if in dark mode
+                if (isDarkMode) {
+                    pdfView.post {
+                        val currentPage = pdfView.currentPage
+                        pdfView.jumpTo(currentPage)
                     }
                 }
-                .onPageChange { page, pageCount ->
-                    title = getString(R.string.page_of_total, page + 1, pageCount)
-                }
-                .onPageError { page, t ->
-                    Toast.makeText(this, "Error loading page ${page + 1}", Toast.LENGTH_SHORT).show()
-                }
-                .load()
-        } catch (e: Exception) {
-            Toast.makeText(this, "Error loading PDF: ${e.message}", Toast.LENGTH_SHORT).show()
-        }
+                // ... rest of onLoad code ... 
+            }
+            .load()
     }
 
     private fun setAppLanguage(locale: Locale) {
@@ -340,8 +336,58 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         if (isSpeaking) {
             stopReading()
         } else {
+            // Update time estimate before starting reading
+            if (sentences.isNotEmpty()) {
+                updateTimeRemaining()
+            }
             startReading()
         }
+    }
+
+    private fun startTimeUpdateTimer() {
+        timeUpdateTimer?.cancel()
+        timeUpdateTimer = Timer().apply {
+            scheduleAtFixedRate(object : TimerTask() {
+                override fun run() {
+                    runOnUiThread {
+                        if (isSpeaking && sentences.isNotEmpty()) {
+                            // Update progress bar only
+                            val estimatedProgress = calculateProgressForCurrentSentence()
+                            binding.mediaControls.audioProgress.progress = estimatedProgress
+                        }
+                    }
+                }
+            }, 0, 100) // Update every 100ms for smoother progress
+        }
+    }
+
+    private fun calculateProgressForCurrentSentence(): Int {
+        if (sentences.isEmpty()) return 0
+
+        val baseProgress = (currentReadingIndex.toFloat() / sentences.size * 100)
+
+        val currentTime = System.currentTimeMillis()
+        val sentenceStartTime = lastSentenceStartTime
+        val estimatedSentenceDuration = estimateSentenceDuration(currentSentence)
+
+        val progressWithinSentence = if (sentenceStartTime > 0) {
+            val timeElapsed = currentTime - sentenceStartTime
+            val progressPercent = (timeElapsed.toFloat() / estimatedSentenceDuration).coerceIn(0f, 1f)
+            (progressPercent * (100f / sentences.size))
+        } else {
+            0f
+        }
+
+        val totalProgress = baseProgress + progressWithinSentence
+        Log.d("Progress", "Base: $baseProgress, Within Sentence: $progressWithinSentence, Total: $totalProgress")
+
+        return totalProgress.toInt().coerceIn(0, 100)
+    }
+
+    private fun estimateSentenceDuration(sentence: String): Long {
+        val wordCount = sentence.split("\\s+".toRegex()).size
+        val wordsPerSecond = speechRate * 2.5f // Approximate words per second at normal rate
+        return (wordCount * 1000 / wordsPerSecond).toLong() // Duration in milliseconds
     }
 
     private fun startReading() {
@@ -353,22 +399,23 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     Toast.makeText(this@MainActivity, R.string.processing_pdf, Toast.LENGTH_SHORT).show()
                 }
                 
-                // Extract text from current page
                 readPage(pdfView.currentPage)
                 
                 withContext(Dispatchers.Main) {
                     if (sentences.isNotEmpty()) {
                         isSpeaking = true
                         currentReadingIndex = 0
-                        updateTimeRemaining(0)
-                        startTimeUpdateTimer()
-                        binding.mediaControls.btnPlayPause.setImageResource(R.drawable.baseline_pause_24)
+                        lastSentenceStartTime = System.currentTimeMillis()
                         
+                        binding.mediaControls.btnPlayPause.setImageResource(R.drawable.baseline_pause_24)
                         binding.mediaControls.audioProgress.max = 100
                         binding.mediaControls.audioProgress.progress = 0
                         
+                        startTimeUpdateTimer()
+                        
                         tts.setSpeechRate(speechRate)
                         currentSentence = sentences[0]
+                        updateTimeRemaining() // Show fixed time estimate for the page
                         highlightCurrentSentence(currentSentence)
                         tts.speak(currentSentence, TextToSpeech.QUEUE_FLUSH, null, "0")
                         
@@ -377,9 +424,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                                 utteranceId.toIntOrNull()?.let { index ->
                                     currentReadingIndex = index
                                     currentSentence = sentences[index]
-                                    lastSentenceStartTime = System.currentTimeMillis() // Record start time
+                                    lastSentenceStartTime = System.currentTimeMillis()
                                     runOnUiThread {
-                                        updateTimeRemaining(index)
+                                        updateTimeRemaining()
                                         highlightCurrentSentence(currentSentence)
                                     }
                                 }
@@ -388,23 +435,18 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                             override fun onDone(utteranceId: String) {
                                 utteranceId.toIntOrNull()?.let { index ->
                                     if (index < sentences.size - 1) {
-                                        // Continue reading current page
                                         currentSentence = sentences[index + 1]
                                         highlightCurrentSentence(currentSentence)
                                         tts.speak(currentSentence, TextToSpeech.QUEUE_FLUSH, null, (index + 1).toString())
                                     } else {
-                                        // Check if there's a next page
                                         runOnUiThread {
                                             if (pdfView.currentPage < pdfView.pageCount - 1) {
-                                                // Move to next page
                                                 pdfView.jumpTo(pdfView.currentPage + 1)
-                                                // Start reading the new page
                                                 lifecycleScope.launch {
-                                                    delay(500) // Small delay to let page load
+                                                    delay(500)
                                                     readNextPage()
                                                 }
                                             } else {
-                                                // No more pages, stop reading
                                                 stopReading()
                                             }
                                         }
@@ -431,6 +473,27 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
     }
 
+    private fun updateTimeRemaining() {
+        if (sentences.isEmpty()) return
+
+        val remainingSentences = sentences.size - currentReadingIndex
+        val remainingWords = sentences.subList(currentReadingIndex, sentences.size)
+            .sumBy { it.split("\\s+".toRegex()).size }
+
+        val wordsPerSecond = speechRate * 2.5f
+        val estimatedSeconds = (remainingWords / wordsPerSecond).toLong()
+
+        val minutes = estimatedSeconds / 60
+        val seconds = estimatedSeconds % 60
+
+        binding.mediaControls.timeRemaining.text = String.format(
+            getString(R.string.time_remaining),
+            minutes,
+            seconds
+        )
+    }
+
+
     private fun readNextPage() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
@@ -440,7 +503,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                         currentReadingIndex = 0
                         currentSentence = sentences[0]
                         binding.mediaControls.audioProgress.progress = 0
-                        updateTimeRemaining(0)
+                        updateTimeRemaining() // Update fixed time for new page
                         highlightCurrentSentence(currentSentence)
                         tts.speak(currentSentence, TextToSpeech.QUEUE_FLUSH, null, "0")
                     }
@@ -476,7 +539,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private fun stopReading() {
         timeUpdateTimer?.cancel()
         timeUpdateTimer = null
-        lastSentenceStartTime = 0
         
         if (::tts.isInitialized) {
             tts.stop()
@@ -494,9 +556,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     private fun highlightCurrentSentence(sentence: String) {
-        // Remove previous highlight if exists
         clearHighlight()
-        
+
         if (sentence.isBlank()) return
 
         lifecycleScope.launch(Dispatchers.IO) {
@@ -504,26 +565,52 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 val document = PDDocument.load(contentResolver.openInputStream(currentUri!!))
                 val stripper = object : PDFTextStripper() {
                     var foundPosition: RectF? = null
-                    
-                    override fun processTextPosition(text: TextPosition) {
-                        if (foundPosition == null && text.unicode.contains(sentence.take(20), ignoreCase = true)) {
-                            // Found the start of our sentence
-                            val pageSize = getCurrentPageSize()
-                            foundPosition = RectF(
-                                text.x,
-                                text.y,
-                                text.x + text.width,
-                                text.y + text.height
-                            )
+
+                    override fun writeString(text: String, textPositions: MutableList<TextPosition>) {
+                        if (foundPosition != null) return
+
+                        val normalizedText = text.replace("\n", " ").trim()
+                        val normalizedSentence = sentence.replace("\n", " ").trim()
+
+                        val index = normalizedText.indexOf(normalizedSentence, ignoreCase = true)
+                        if (index >= 0) {
+                            var startPositionIndex = 0
+                            var accumulatedLength = 0
+                            for ((i, tp) in textPositions.withIndex()) {
+                                accumulatedLength += tp.unicode.length
+                                if (accumulatedLength >= index + 1) {
+                                    startPositionIndex = i
+                                    break
+                                }
+                            }
+
+                            var endPositionIndex = startPositionIndex
+                            accumulatedLength = 0
+                            for (i in startPositionIndex until textPositions.size) {
+                                accumulatedLength += textPositions[i].unicode.length
+                                if (accumulatedLength >= normalizedSentence.length) {
+                                    endPositionIndex = i
+                                    break
+                                }
+                            }
+
+                            val sentencePositions = textPositions.subList(startPositionIndex, endPositionIndex + 1)
+                            val x = sentencePositions.minOf { it.x }
+                            val y = sentencePositions.minOf { it.y }
+                            val maxX = sentencePositions.maxOf { it.x + it.width }
+                            val maxY = sentencePositions.maxOf { it.y + it.height }
+                            val width = maxX - x
+                            val height = maxY - y
+
+                            foundPosition = RectF(x, y, x + width, y + height)
                         }
-                        super.processTextPosition(text)
+                        super.writeString(text, textPositions)
                     }
                 }.apply {
                     startPage = pdfView.currentPage + 1
                     endPage = pdfView.currentPage + 1
                 }
-                
-                // This will process the page and populate foundPosition
+
                 stripper.getText(document)
                 document.close()
 
@@ -538,25 +625,32 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
     }
 
+
     private fun createHighlightOverlay(position: RectF) {
         val highlight = View(this).apply {
-            background = ContextCompat.getDrawable(context, currentHighlightColor)
+            setBackgroundColor(ContextCompat.getColor(context, currentHighlightColor))
             alpha = 0.3f
         }
 
         val pageSize = getCurrentPageSize()
         val container = binding.pdfView
-        
+
         // Calculate scaling factors
         val scaleX = container.width.toFloat() / pageSize.width
         val scaleY = container.height.toFloat() / pageSize.height
 
+        // Adjust for coordinate systems (PDF vs Android)
+        val left = position.left * scaleX
+        val top = (pageSize.height - position.top - position.height()) * scaleY
+        val width = position.width() * scaleX
+        val height = position.height() * scaleY
+
         val layoutParams = FrameLayout.LayoutParams(
-            (position.width() * scaleX).toInt(),
-            (position.height() * scaleY).toInt()
+            width.toInt(),
+            height.toInt()
         ).apply {
-            leftMargin = (position.left * scaleX).toInt()
-            topMargin = (position.top * scaleY).toInt()
+            leftMargin = left.toInt()
+            topMargin = top.toInt()
         }
 
         highlight.layoutParams = layoutParams
@@ -566,12 +660,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         highlightView = highlight
     }
 
-    private fun clearHighlight() {
-        highlightView?.let { highlight ->
-            (highlight.parent as? ViewGroup)?.removeView(highlight)
-            highlightView = null
-        }
-    }
 
     // Data class to wrap TextPosition for easier handling
     data class TextPositionWrapper(val textPosition: TextPosition) {
@@ -609,11 +697,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private fun setupMediaControls() {
         binding.mediaControls.apply {
             btnPlayPause.setOnClickListener { 
-                if (isSpeaking) {
-                    stopReading()
-                } else {
-                    toggleReading()
-                }
+                toggleReading()
             }
             
             btnPrevious.setOnClickListener {
@@ -673,109 +757,32 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             }
 
             audioProgress.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                private var userDragging = false
-                
                 override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
                     if (fromUser && sentences.isNotEmpty()) {
                         val newIndex = (progress * sentences.size / 100f).toInt().coerceIn(0, sentences.size - 1)
-                        currentReadingIndex = newIndex
-                        currentSentence = sentences[newIndex]
-                        updateTimeRemaining(newIndex)
-                        
-                        if (userDragging) {
-                            // Preview highlight without changing audio
+                        if (newIndex != currentReadingIndex) {
+                            currentReadingIndex = newIndex
+                            currentSentence = sentences[newIndex]
+                            lastSentenceStartTime = System.currentTimeMillis()
+                            updateTimeRemaining()
                             highlightCurrentSentence(currentSentence)
                         }
                     }
                 }
 
                 override fun onStartTrackingTouch(seekBar: SeekBar) {
-                    userDragging = true
                     if (isSpeaking) {
                         tts.stop()
                     }
                 }
 
                 override fun onStopTrackingTouch(seekBar: SeekBar) {
-                    userDragging = false
                     if (isSpeaking) {
-                        // Resume speaking from new position
                         tts.speak(currentSentence, TextToSpeech.QUEUE_FLUSH, null, currentReadingIndex.toString())
                     }
                 }
             })
         }
-    }
-
-    private fun updateTimeRemaining(currentIndex: Int) {
-        if (sentences.isEmpty()) return
-
-        // Calculate remaining sentences
-        val remainingSentences = sentences.subList(currentIndex, sentences.size)
-        
-        // Calculate total estimated duration for remaining sentences
-        var totalDurationMs = 0L
-        remainingSentences.forEach { sentence ->
-            totalDurationMs += estimateSentenceDuration(sentence)
-        }
-        
-        // Add small pauses between sentences
-        totalDurationMs += (remainingSentences.size - 1) * 300 // 300ms pause between sentences
-        
-        // Convert to minutes and seconds
-        val totalSeconds = totalDurationMs / 1000
-        val minutes = totalSeconds / 60
-        val seconds = totalSeconds % 60
-
-        // Update UI
-        binding.mediaControls.timeRemaining.text = String.format(
-            getString(R.string.time_remaining),
-            minutes,
-            seconds
-        )
-    }
-
-    private fun calculateProgressForCurrentSentence(): Int {
-        if (sentences.isEmpty()) return 0
-        
-        // Calculate base progress from completed sentences
-        val baseProgress = (currentReadingIndex.toFloat() / sentences.size * 100)
-        
-        // Calculate progress within current sentence
-        val currentTime = System.currentTimeMillis()
-        val sentenceStartTime = lastSentenceStartTime
-        val estimatedSentenceDuration = estimateSentenceDuration(currentSentence)
-        
-        val progressWithinSentence = if (sentenceStartTime > 0) {
-            val timeElapsed = currentTime - sentenceStartTime
-            val progressPercent = (timeElapsed.toFloat() / estimatedSentenceDuration).coerceIn(0f, 1f)
-            (progressPercent * (100f / sentences.size))
-        } else {
-            0f
-        }
-        
-        return (baseProgress + progressWithinSentence).toInt().coerceIn(0, 100)
-    }
-
-    private fun estimateSentenceDuration(sentence: String): Long {
-        // Estimate duration based on word count and speech rate
-        val wordCount = sentence.split("\\s+".toRegex()).size
-        val wordsPerSecond = speechRate * 2.5f // Approximate words per second at normal rate
-        return (wordCount * 1000 / wordsPerSecond).toLong() // Duration in milliseconds
-    }
-
-    // Add these properties to the class
-    private var lastSentenceStartTime: Long = 0
-    
-    private fun toggleMediaControlsVisibility(show: Boolean) {
-        isMediaControlsVisible = show
-        binding.mediaControls.root.visibility = if (show) View.VISIBLE else View.GONE
-        
-        // Update read FAB icon if needed
-        binding.fabRead.setImageResource(
-            if (show) R.drawable.baseline_close_24
-            else R.drawable.baseline_play_arrow_24
-        )
     }
 
     private fun changeHighlightColor(colorRes: Int) {
@@ -854,6 +861,32 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 toggleFabMenu()
             }
         }
+
+        // Add theme FAB to the list of FABs to animate
+        val fabs = listOf(binding.fabAdd, binding.fabRead, binding.fabLanguage, binding.fabTheme)
+        
+        fabs.forEachIndexed { index, fab ->
+            if (isFabMenuExpanded) {
+                fab.alpha = 1f
+                fab.visibility = View.VISIBLE
+                fab.animate()
+                    .translationY(-((index + 1) * 16 + index * 56).toFloat())
+                    .setDuration(200)
+                    .withLayer()
+                    .start()
+            } else {
+                fab.animate()
+                    .translationY(0f)
+                    .setDuration(200)
+                    .withLayer()
+                    .withEndAction {
+                        if (!isFabMenuExpanded) {
+                            fab.visibility = View.GONE
+                        }
+                    }
+                    .start()
+            }
+        }
     }
     
     private fun toggleFabMenu() {
@@ -862,7 +895,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         val rotation = if (isFabMenuExpanded) 45f else 0f
         binding.fabMain.animate().rotation(rotation).setDuration(200)
         
-        val fabs = listOf(binding.fabAdd, binding.fabRead, binding.fabLanguage)
+        val fabs = listOf(binding.fabAdd, binding.fabRead, binding.fabLanguage, binding.fabTheme)
         
         fabs.forEachIndexed { index, fab ->
             if (isFabMenuExpanded) {
@@ -918,24 +951,15 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             .show()
     }
 
-    private fun startTimeUpdateTimer() {
-        timeUpdateTimer?.cancel()
-        timeUpdateTimer = Timer().apply {
-            scheduleAtFixedRate(object : TimerTask() {
-                override fun run() {
-                    runOnUiThread {
-                        if (isSpeaking && sentences.isNotEmpty()) {
-                            // Update time remaining
-                            updateTimeRemaining(currentReadingIndex)
-                            
-                            // Update progress bar
-                            val estimatedProgress = calculateProgressForCurrentSentence()
-                            binding.mediaControls.audioProgress.progress = estimatedProgress
-                        }
-                    }
-                }
-            }, 0, 100) // Update every 100ms for smoother progress
-        }
+    private fun toggleMediaControlsVisibility(show: Boolean) {
+        isMediaControlsVisible = show
+        binding.mediaControls.root.visibility = if (show) View.VISIBLE else View.GONE
+        
+        // Update read FAB icon if needed
+        binding.fabRead.setImageResource(
+            if (show) R.drawable.baseline_close_24
+            else R.drawable.baseline_play_arrow_24
+        )
     }
 
     override fun onDestroy() {
@@ -959,6 +983,59 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         } catch (e: Exception) {
             Log.e("PDF", "Error getting page size: ${e.message}")
             PageSize(pdfView.width.toFloat(), pdfView.height.toFloat())
+        }
+    }
+
+    private fun clearHighlight() {
+        highlightView?.let { highlight ->
+            (highlight.parent as? ViewGroup)?.removeView(highlight)
+            highlightView = null
+        }
+    }
+
+    private fun setupThemeButton() {
+        binding.fabTheme.setOnClickListener {
+            toggleFabMenu()
+            toggleTheme()
+        }
+    }
+
+    private fun toggleTheme() {
+        isDarkMode = !isDarkMode
+        updateTheme()
+    }
+
+    private fun updateTheme() {
+        // Hide the action bar
+        supportActionBar?.hide()
+
+        // Update PDF view night mode
+        pdfView.setNightMode(isDarkMode)
+        pdfView.setBackgroundColor(if (isDarkMode) Color.BLACK else Color.WHITE)
+        
+        // Force redraw the current page to apply night mode
+        val currentPage = pdfView.currentPage
+        pdfView.jumpTo(currentPage)
+
+        // Update other UI elements if needed
+        binding.mediaControls.root.setBackgroundColor(
+            if (isDarkMode) Color.parseColor("#1A1A1A") else Color.WHITE
+        )
+        binding.mediaControls.timeRemaining.setTextColor(
+            if (isDarkMode) Color.WHITE else Color.BLACK
+        )
+    }
+
+    private fun checkSystemTheme() {
+        val currentNightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        isDarkMode = currentNightMode == Configuration.UI_MODE_NIGHT_YES
+        
+        // Force a theme toggle if in dark mode to ensure proper PDF rendering
+        if (isDarkMode) {
+            isDarkMode = false  // Temporarily set to light mode
+            toggleTheme()       // Toggle to dark mode properly
+        } else {
+            updateTheme()       // Just update for light mode
         }
     }
 }
