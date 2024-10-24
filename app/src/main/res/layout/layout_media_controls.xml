@@ -9,6 +9,7 @@
         android:padding="8dp"
         android:layout_margin="16dp">
 
+        <!-- Main controls row -->
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -24,6 +25,16 @@
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@drawable/baseline_skip_previous_24"
                 android:contentDescription="Previous"/>
+
+            <!-- Stop button -->
+            <ImageButton
+                android:id="@+id/btn_stop"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:padding="12dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/baseline_stop_24"
+                android:contentDescription="@string/stop"/>
 
             <!-- Play/Pause button -->
             <ImageButton
@@ -45,26 +56,7 @@
                 android:src="@drawable/baseline_skip_next_24"
                 android:contentDescription="Next"/>
 
-            <!-- Zoom controls -->
-            <ImageButton
-                android:id="@+id/btn_zoom_in"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:padding="12dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@drawable/baseline_zoom_in_24"
-                android:contentDescription="Zoom in"/>
-
-            <ImageButton
-                android:id="@+id/btn_zoom_out"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:padding="12dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@drawable/baseline_zoom_out_24"
-                android:contentDescription="Zoom out"/>
-
-            <!-- Speed control -->
+            <!-- Speed control button -->
             <ImageButton
                 android:id="@+id/btn_speed"
                 android:layout_width="48dp"
@@ -72,7 +64,7 @@
                 android:padding="12dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@drawable/baseline_speed_24"
-                android:contentDescription="Speed control"/>
+                android:contentDescription="@string/reading_speed"/>
 
             <!-- Close button -->
             <ImageButton
@@ -85,19 +77,50 @@
                 android:contentDescription="Close"/>
         </LinearLayout>
 
-        <SeekBar
-            android:id="@+id/speed_seekbar"
-            android:layout_width="200dp"
+        <!-- Audio progress bar -->
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:max="20"
-            android:progress="10"
-            android:layout_marginTop="8dp"/>
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
 
-        <TextView
-            android:id="@+id/speed_text"
+            <SeekBar
+                android:id="@+id/audio_progress"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="8dp"/>
+
+            <TextView
+                android:id="@+id/time_remaining"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:text="@string/default_time"/>
+        </LinearLayout>
+
+        <!-- Speed control container -->
+        <LinearLayout
+            android:id="@+id/speed_control_container"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:text="1.0x"/>
+            android:orientation="horizontal"
+            android:visibility="gone"
+            android:layout_marginTop="8dp">
+
+            <TextView
+                android:id="@+id/speed_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="1.0x"
+                android:layout_marginEnd="8dp"/>
+
+            <SeekBar
+                android:id="@+id/speed_seekbar"
+                android:layout_width="200dp"
+                android:layout_height="wrap_content"
+                android:max="20"
+                android:progress="10"/>
+        </LinearLayout>
     </LinearLayout>
 </layout>

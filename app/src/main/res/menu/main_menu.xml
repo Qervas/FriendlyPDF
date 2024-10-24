@@ -3,34 +3,14 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
     
     <item
-        android:id="@+id/action_zoom_in"
-        android:icon="@drawable/baseline_zoom_in_24"
-        android:title="Zoom In"
-        app:showAsAction="ifRoom" />
-    
-    <item
-        android:id="@+id/action_zoom_out"
-        android:icon="@drawable/baseline_zoom_out_24"
-        android:title="Zoom Out"
-        app:showAsAction="ifRoom" />
+        android:id="@+id/action_settings"
+        android:orderInCategory="100"
+        android:title="@string/action_settings"
+        app:showAsAction="never" />
 
     <item
-        android:id="@+id/action_toggle_scroll"
-        android:icon="@drawable/baseline_screen_rotation_24"
-        android:title="Toggle Scroll Direction"
-        app:showAsAction="ifRoom" />
-    
-    <item
-        android:id="@+id/action_language"
-        android:title="Language"
-        app:showAsAction="never">
-        <menu>
-            <item
-                android:id="@+id/action_lang_en"
-                android:title="English" />
-            <item
-                android:id="@+id/action_lang_de"
-                android:title="Deutsch" />
-        </menu>
-    </item>
+        android:id="@+id/action_about"
+        android:orderInCategory="101"
+        android:title="@string/action_about"
+        app:showAsAction="never" />
 </menu>

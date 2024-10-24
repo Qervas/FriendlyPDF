@@ -18,27 +18,116 @@
         android:layout_gravity="bottom|center_horizontal"
         android:visibility="gone" />
 
-    <LinearLayout
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|end"
-        android:orientation="vertical"
-        android:padding="16dp">
+    <!-- FAB Menu Container -->
+    <FrameLayout
+        android:id="@+id/fab_menu_container"
+        android:layout_width="120dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="end"
+        android:layout_marginBottom="16dp"
+        android:layout_marginEnd="16dp"
+        android:background="@android:color/transparent"
+        android:clipChildren="false"
+        android:clipToPadding="false">
 
+        <!-- Language FAB -->
         <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/fab_view_mode"
+            android:id="@+id/fab_language"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            android:contentDescription="Change view mode"
-            app:srcCompat="@drawable/baseline_view_agenda_24" />
+            android:layout_gravity="bottom|end"
+            android:layout_marginBottom="208dp"
+            android:visibility="gone"
+            android:contentDescription="@string/change_language"
+            app:fabSize="mini"
+            app:tint="@android:color/white"
+            app:backgroundTint="#00BFA5"
+            app:srcCompat="@drawable/baseline_language_24" />
 
+        <!-- Read FAB -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/fab_read"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|end"
+            android:layout_marginBottom="144dp"
+            android:visibility="gone"
+            android:contentDescription="@string/start_reading"
+            app:fabSize="mini"
+            app:tint="@android:color/white"
+            app:backgroundTint="#00BFA5"
+            app:srcCompat="@drawable/baseline_play_arrow_24" />
+
+        <!-- Add PDF FAB -->
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/fab_add"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:contentDescription="Add PDF"
+            android:layout_gravity="bottom|end"
+            android:layout_marginBottom="80dp"
+            android:visibility="gone"
+            android:contentDescription="@string/add_pdf"
+            app:fabSize="mini"
+            app:tint="@android:color/white"
+            app:backgroundTint="#00BFA5"
             app:srcCompat="@android:drawable/ic_input_add" />
+
+        <!-- Main FAB -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/fab_main"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|end"
+            android:contentDescription="@string/menu"
+            app:fabSize="normal"
+            app:tint="@android:color/white"
+            app:backgroundTint="#6200EE"
+            app:srcCompat="@drawable/baseline_menu_24" />
+
+    </FrameLayout>
+
+    <!-- Optional: Labels for FABs -->
+    <LinearLayout
+        android:id="@+id/fab_labels"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:layout_marginEnd="72dp">
+
+        <TextView
+            android:id="@+id/label_language"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="28dp"
+            android:visibility="gone"
+            android:text="@string/change_language"
+            android:background="@drawable/fab_label_background"
+            android:padding="8dp"
+            android:textColor="@android:color/white"/>
+
+        <TextView
+            android:id="@+id/label_read"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="28dp"
+            android:visibility="gone"
+            android:text="@string/start_reading"
+            android:background="@drawable/fab_label_background"
+            android:padding="8dp"
+            android:textColor="@android:color/white"/>
+
+        <TextView
+            android:id="@+id/label_add"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="28dp"
+            android:visibility="gone"
+            android:text="@string/add_pdf"
+            android:background="@drawable/fab_label_background"
+            android:padding="8dp"
+            android:textColor="@android:color/white"/>
 
     </LinearLayout>
 
