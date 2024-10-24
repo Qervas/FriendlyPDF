@@ -170,10 +170,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             .putString(LAST_PDF_URI, uri.toString())
             .apply()
         
-        // the existing PDF loading code...
         lifecycleScope.launch {
             try {
-                // Show loading indicator
                 withContext(Dispatchers.Main) {
                     Toast.makeText(
                         this@MainActivity,
@@ -182,29 +180,22 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     ).show()
                 }
 
-                pdfView.fromUri(uri)
-                    .defaultPage(0)
-                    .enableSwipe(true)
-                    .swipeHorizontal(false)
-                    .pageSnap(true)
-                    .autoSpacing(true)
-                    .pageFling(true)
-                    .enableDoubletap(true)
-                    .enableAnnotationRendering(false)
-                    .scrollHandle(DefaultScrollHandle(this@MainActivity))
-                    .spacing(10)
-                    .onLoad { pageCount ->
-                        // PDF loaded successfully
+                // If in dark mode, force a theme cycle to ensure proper rendering
+                if (isDarkMode) {
+                    pdfView.post {
+                        pdfView.setNightMode(false)
+                        pdfView.setBackgroundColor(Color.WHITE)
+                        
+                        // Toggle back to dark after a short delay
+                        pdfView.postDelayed({
+                            pdfView.setNightMode(true)
+                            pdfView.setBackgroundColor(Color.BLACK)
+                            loadPdfWithCurrentSettings(uri, 0)
+                        }, 100)
                     }
-                    .onError { throwable ->
-                        // Handle error
-                        Toast.makeText(
-                            this@MainActivity,
-                            getString(R.string.error_reading_pdf, throwable.message),
-                            Toast.LENGTH_LONG
-                        ).show()
-                    }
-                    .load()
+                } else {
+                    loadPdfWithCurrentSettings(uri, 0)
+                }
 
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
