@@ -13,4 +13,10 @@
         android:icon="@drawable/baseline_zoom_out_24"
         android:title="Zoom Out"
         app:showAsAction="ifRoom" />
+
+    <item
+        android:id="@+id/action_toggle_scroll"
+        android:icon="@drawable/baseline_screen_rotation_24"
+        android:title="Toggle Scroll Direction"
+        app:showAsAction="ifRoom" />
 </menu>
