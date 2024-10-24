@@ -1,6 +1,7 @@
 <resources>
     <string name="app_name">FriendlyPDF</string>
     <string name="page_of_total">Page %1$d of %2$d</string>
+    <string name="page_number_format">Page %1$d of %2$d</string>
     
     <!-- Media Controls -->
     <string name="previous_page">Previous page</string>

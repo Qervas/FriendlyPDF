@@ -99,6 +99,7 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val PREFS_NAME = "FriendlyPDFPrefs"
         private const val LAST_PDF_URI = "last_pdf_uri"
+        private const val LAST_PAGE_NUMBER = "last_page_number"
         private const val THEME_PREF = "theme_preference"  // Add this
     }
 
@@ -107,16 +108,10 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         
-        // Start and bind to TTS Service
-        Intent(this, TTSService::class.java).also { intent ->
-            startService(intent)
-            bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
-        }
-        
         // Initialize PDFBox
         PDFBoxResourceLoader.init(applicationContext)
         
-        // Load saved theme preference before initializing PDF view
+        // Load saved preferences
         val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         isDarkMode = prefs.getBoolean(THEME_PREF, 
             (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
@@ -127,33 +122,31 @@ class MainActivity : AppCompatActivity() {
         pdfView.setNightMode(isDarkMode)
         pdfView.setBackgroundColor(if (isDarkMode) Color.BLACK else Color.WHITE)
         
-        // Check for intent first
+        // Setup other UI components
+        setupMediaControls()
+        setupFabMenu()
+        supportActionBar?.hide()
+        checkSystemTheme()
+        setupThemeButton()
+
+        // Start and bind to TTS Service
+        Intent(this, TTSService::class.java).also { intent ->
+            startService(intent)
+            bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+        }
+
+        // Load last opened PDF or handle incoming intent
         if (intent?.action == Intent.ACTION_VIEW && intent.data != null) {
             loadPDF(intent.data!!)
         } else {
-            // Try to load last opened PDF
-            loadLastOpenedPDF()
+            val lastPdfUri = prefs.getString(LAST_PDF_URI, null)
+            val lastPageNumber = prefs.getInt(LAST_PAGE_NUMBER, 0)
+            Log.d("PDF_READER", "Last saved URI: $lastPdfUri, Last saved page: $lastPageNumber")
+            if (lastPdfUri != null) {
+                val uri = Uri.parse(lastPdfUri)
+                loadPdfWithCurrentSettings(uri, lastPageNumber)
+            }
         }
-        
-        // Setup media controls
-        setupMediaControls()
-        
-        // Setup FAB menu
-        setupFabMenu()
-        
-        // Hide action bar immediately
-        supportActionBar?.hide()
-        
-        // Check system theme and force initial state
-        checkSystemTheme()
-        
-        // Check system theme
-        val currentNightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
-        isDarkMode = currentNightMode == Configuration.UI_MODE_NIGHT_YES
-        updateTheme()
-        
-        checkSystemTheme() // Check system theme on create
-        setupThemeButton()
     }
 
     private fun loadLastOpenedPDF() {
@@ -269,7 +262,7 @@ class MainActivity : AppCompatActivity() {
                 } catch (e: SecurityException) {
                     // Permission might already be taken or not available
                 }
-                loadPDF(uri)
+                loadPdfWithCurrentSettings(uri, 0)  // Start from the first page for newly opened PDFs
             }
         }
     }
@@ -294,8 +287,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadPdfWithCurrentSettings(uri: Uri, pageNumber: Int = 0) {
+        currentUri = uri
+        Log.d("PDF_READER", "Loading PDF with page number: $pageNumber")
         pdfView.fromUri(uri)
             .defaultPage(pageNumber)
+            .onPageChange { page, pageCount ->
+                currentPage = page
+                updatePageNumber(page + 1, pageCount)
+                Log.d("PDF_READER", "Page changed to: ${page + 1}")
+                // Save the current page number
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().apply {
+                    putInt(LAST_PAGE_NUMBER, page)
+                    apply()
+                }
+            }
             .enableSwipe(true)
             .swipeHorizontal(false)
             .pageSnap(true)
@@ -307,13 +312,7 @@ class MainActivity : AppCompatActivity() {
             .spacing(10)
             .nightMode(isDarkMode)
             .onLoad { 
-                // Force refresh after loading
-                pdfView.post {
-                    if (isDarkMode) {
-                        val currentPage = pdfView.currentPage
-                        pdfView.jumpTo(currentPage)
-                    }
-                }
+                Log.d("PDF_READER", "PDF loaded, current page: ${pdfView.currentPage}")
             }
             .load()
     }
@@ -1088,6 +1087,32 @@ class MainActivity : AppCompatActivity() {
             toggleTheme()       // Toggle to dark mode properly
         } else {
             updateTheme()       // Just update for light mode
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        currentUri?.let { uri ->
+            val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            val currentPage = pdfView.currentPage
+            prefs.edit().apply {
+                putString(LAST_PDF_URI, uri.toString())
+                putInt(LAST_PAGE_NUMBER, currentPage)
+                apply()
+            }
+            Log.d("PDF_READER", "Saved page number: $currentPage")
+        }
+    }
+
+    private fun updatePageNumber(currentPage: Int, totalPages: Int) {
+        binding.pageNumber.text = getString(R.string.page_number_format, currentPage, totalPages)
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        intent?.data?.let { uri ->
+            loadPdfWithCurrentSettings(uri, 0)  // Start from page 0 for new PDFs
         }
     }
 }
