@@ -9,5 +9,6 @@ data class Book(
     val title: String,
     val uri: String,
     val lastPageRead: Int,
-    val lastReadTimestamp: Long
+    val lastReadTimestamp: Long,
+    val thumbnailPath: String? = null // Add this field
 )

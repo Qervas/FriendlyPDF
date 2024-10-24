@@ -54,6 +54,12 @@ import androidx.room.Query
 import android.content.ContentResolver
 import android.database.Cursor
 import android.provider.OpenableColumns
+import android.graphics.Bitmap
+import android.graphics.Matrix
+import android.graphics.pdf.PdfRenderer
+import android.graphics.pdf.PdfDocument
+import java.io.File
+import java.io.FileOutputStream
 
 // Make PageSize public by moving it outside the file-level scope
 data class PageSize(val width: Float, val height: Float)
@@ -1168,11 +1174,14 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     // Add a new book
                     val bookTitle = extractBookName(uri)
+                    // Generate thumbnail when adding new book
+                    val thumbnail = generateThumbnail(uri)
                     val newBook = Book(
                         title = bookTitle,
                         uri = uri.toString(),
                         lastPageRead = 0,
-                        lastReadTimestamp = System.currentTimeMillis()
+                        lastReadTimestamp = System.currentTimeMillis(),
+                        thumbnailPath = thumbnail // Add this new field to store thumbnail path
                     )
                     database.bookDao().insertBook(newBook)
                     Log.d("BookshelfDebug", "Added new book: $bookTitle")
@@ -1190,6 +1199,60 @@ class MainActivity : AppCompatActivity() {
             } ?: "Unknown Book"
         } else {
             uri.lastPathSegment?.substringAfterLast('/') ?: "Unknown Book"
+        }
+    }
+
+    private fun generateThumbnail(uri: Uri): String? {
+        return try {
+            contentResolver.openFileDescriptor(uri, "r")?.use { parcelFileDescriptor ->
+                val renderer = PdfRenderer(parcelFileDescriptor)
+                renderer.use { pdfRenderer ->
+                    if (pdfRenderer.pageCount > 0) {
+                        pdfRenderer.openPage(0).use { page ->
+                            // Define maximum dimensions
+                            val maxWidth = 300
+                            val maxHeight = 400
+                            
+                            // Calculate scale to fit within max dimensions
+                            val scale = minOf(
+                                maxWidth.toFloat() / page.width,
+                                maxHeight.toFloat() / page.height
+                            )
+                            
+                            // Create bitmap with scaled dimensions
+                            val bitmap = Bitmap.createBitmap(
+                                (page.width * scale).toInt(),
+                                (page.height * scale).toInt(),
+                                Bitmap.Config.ARGB_8888
+                            )
+                            
+                            // Render the page onto the bitmap
+                            page.render(
+                                bitmap,
+                                null,
+                                Matrix().apply { postScale(scale, scale) },
+                                PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY
+                            )
+
+                            // Save bitmap to internal storage
+                            val thumbnailFile = File(
+                                filesDir,
+                                "thumbnails/${uri.lastPathSegment}_thumb.jpg"
+                            )
+                            thumbnailFile.parentFile?.mkdirs()
+                            
+                            FileOutputStream(thumbnailFile).use { out ->
+                                bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
+                            }
+                            
+                            thumbnailFile.absolutePath
+                        }
+                    } else null
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error generating thumbnail", e)
+            null
         }
     }
 }

@@ -55,7 +55,12 @@ class BookshelfActivity : AppCompatActivity() {
     }
 
     private fun setupRecyclerView() {
-        bookAdapter = BookAdapter(emptyList(), this::onBookClick, this::onBookDelete)
+        bookAdapter = BookAdapter(
+            emptyList(),
+            this::onBookClick,
+            this::onBookDelete,
+            this  // Pass the activity as context
+        )
         binding.recyclerView.apply {
             layoutManager = LinearLayoutManager(this@BookshelfActivity)
             adapter = bookAdapter

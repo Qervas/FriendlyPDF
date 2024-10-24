@@ -19,7 +19,6 @@
             android:layout_height="80dp"
             android:scaleType="centerCrop"
             android:background="@drawable/pdf_thumbnail_background"
-            android:src="@drawable/ic_pdf"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintBottom_toBottomOf="parent"/>
