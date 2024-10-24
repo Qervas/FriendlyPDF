@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layout xmlns:android="http://schemas.android.com/apk/res/android">
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@android:color/white"
+        android:elevation="4dp"
+        android:padding="8dp"
+        android:layout_margin="16dp">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <!-- Previous button -->
+            <ImageButton
+                android:id="@+id/btn_previous"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:padding="12dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/baseline_skip_previous_24"
+                android:contentDescription="Previous"/>
+
+            <!-- Play/Pause button -->
+            <ImageButton
+                android:id="@+id/btn_play_pause"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:padding="12dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/baseline_play_arrow_24"
+                android:contentDescription="Play/Pause"/>
+
+            <!-- Next button -->
+            <ImageButton
+                android:id="@+id/btn_next"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:padding="12dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/baseline_skip_next_24"
+                android:contentDescription="Next"/>
+
+            <!-- Zoom controls -->
+            <ImageButton
+                android:id="@+id/btn_zoom_in"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:padding="12dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/baseline_zoom_in_24"
+                android:contentDescription="Zoom in"/>
+
+            <ImageButton
+                android:id="@+id/btn_zoom_out"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:padding="12dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/baseline_zoom_out_24"
+                android:contentDescription="Zoom out"/>
+
+            <!-- Speed control -->
+            <ImageButton
+                android:id="@+id/btn_speed"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:padding="12dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/baseline_speed_24"
+                android:contentDescription="Speed control"/>
+
+            <!-- Close button -->
+            <ImageButton
+                android:id="@+id/btn_close"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:padding="12dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/baseline_close_24"
+                android:contentDescription="Close"/>
+        </LinearLayout>
+
+        <SeekBar
+            android:id="@+id/speed_seekbar"
+            android:layout_width="200dp"
+            android:layout_height="wrap_content"
+            android:max="20"
+            android:progress="10"
+            android:layout_marginTop="8dp"/>
+
+        <TextView
+            android:id="@+id/speed_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:text="1.0x"/>
+    </LinearLayout>
+</layout>

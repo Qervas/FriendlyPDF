@@ -1,4 +1,27 @@
 <resources>
     <string name="app_name">FriendlyPDF</string>
     <string name="page_of_total">Page %1$d of %2$d</string>
+    
+    <!-- Media Controls -->
+    <string name="previous_page">Previous page</string>
+    <string name="next_page">Next page</string>
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="hide_controls">Hide controls</string>
+    <string name="show_controls">Show controls</string>
+    
+    <!-- Messages -->
+    <string name="reading_page">Reading page %1$d</string>
+    <string name="stopped_reading">Stopped reading</string>
+    <string name="error_reading_pdf">Error reading PDF: %1$s</string>
+    <string name="language_not_supported">Language not supported</string>
+    <string name="tts_init_failed">Text-to-speech initialization failed</string>
+    <string name="processing_pdf">Processing PDF…</string>
+    
+    <!-- Speed Control -->
+    <string name="reading_speed">Reading Speed</string>
+    <string name="speed_slow">Slow</string>
+    <string name="speed_normal">Normal</string>
+    <string name="speed_fast">Fast</string>
+    <string name="speed_very_fast">Very Fast</string>
 </resources>
