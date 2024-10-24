@@ -1,6 +1,6 @@
 # Friendly PDF Reader
 
-An accessible PDF reader focused on readability and text-to-speech capabilities. This is an early conceptual application designed to make PDF reading more user-friendly.
+An accessible PDF reader focused on readability and text-to-speech capabilities. This application is designed to make PDF reading more user-friendly and now includes a bookshelf feature for better document management.
 
 ## Features
 
@@ -30,14 +30,22 @@ An accessible PDF reader focused on readability and text-to-speech capabilities.
   - System theme detection
   - Manual theme toggle
   - Persistent theme settings
-- **Floating Action Menu**: Quick access to core functions
+- **Floating Action Menu**: Quick access to core functions, including bookshelf
 - **Last Read Position**: Remembers the last opened PDF and position
 
-## Current Limitations
+### New Bookshelf Feature
 
-- Early conceptual version
-- Some PDF formats might not render perfectly
-- Text extraction might vary depending on PDF structure
+- **Document Management**: Organize and access your PDFs from a central bookshelf
+- **Thumbnails**: Visual representation of PDF documents
+- **Reading Progress**: Tracks and displays the last read page for each document
+- **Quick Access**: Open PDFs directly from the bookshelf
+
+## Current Improvements
+
+- Bookshelf functionality for better document organization
+- Thumbnail generation for visual document representation
+- Reading progress tracking per document
+- Integration of bookshelf access into the floating action menu
 
 ## Future Improvements
 
@@ -54,10 +62,11 @@ An accessible PDF reader focused on readability and text-to-speech capabilities.
 - Uses PDFBox for text extraction
 - Implements Android's TextToSpeech
 - Requires Android API level 34
+- Utilizes Room database for bookshelf management
 
 ## Feedback
 
-This is an early concept application. Feedback and suggestions are welcome for future improvements.
+While this application has seen significant improvements, it's still under active development. Feedback and suggestions are welcome for future enhancements.
 
 ---
 
