@@ -119,10 +119,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var database: AppDatabase
 
     companion object {
-        private const val PREFS_NAME = "FriendlyPDFPrefs"
+        const val PREFS_NAME = "FriendlyPDFPrefs"
         private const val LAST_PDF_URI = "last_pdf_uri"
         private const val LAST_PAGE_NUMBER = "last_page_number"
-        private const val THEME_PREF = "theme_preference"  // Add this
+        const val THEME_PREF = "theme_preference"  // Add this
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -136,13 +136,11 @@ class MainActivity : AppCompatActivity() {
         // Initialize PDFBox
         PDFBoxResourceLoader.init(applicationContext)
         
-        // Load saved preferences
-        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-        isDarkMode = prefs.getBoolean(THEME_PREF, 
-            (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-        )
-        
-        // Initialize PDF view with saved theme
+        // Check system dark mode setting
+        val currentNightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        isDarkMode = currentNightMode == Configuration.UI_MODE_NIGHT_YES
+
+        // Initialize PDF view with system theme
         pdfView = binding.pdfView
         pdfView.setNightMode(isDarkMode)
         pdfView.setBackgroundColor(if (isDarkMode) Color.BLACK else Color.WHITE)
@@ -151,7 +149,6 @@ class MainActivity : AppCompatActivity() {
         setupMediaControls()
         setupFabMenu()
         supportActionBar?.hide()
-        checkSystemTheme()
         setupThemeButton()
 
         // Start and bind to TTS Service
@@ -176,6 +173,7 @@ class MainActivity : AppCompatActivity() {
                 loadPDF(intent.data!!)
             }
         } else {
+            val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             val lastPdfUri = prefs.getString(LAST_PDF_URI, null)
             val lastPageNumber = prefs.getInt(LAST_PAGE_NUMBER, 0)
             Log.d("PDF_READER", "Last saved URI: $lastPdfUri, Last saved page: $lastPageNumber")

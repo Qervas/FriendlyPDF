@@ -17,4 +17,6 @@
     <!-- High contrast options for accessibility -->
     <color name="highlight_high_contrast">#66000000</color>
     <color name="highlight_light_contrast">#33FFFFFF</color>
+    
+    <color name="splash_background_color">#005279</color>
 </resources>
