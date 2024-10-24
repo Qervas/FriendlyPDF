@@ -80,6 +80,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     companion object {
         private const val PREFS_NAME = "FriendlyPDFPrefs"
         private const val LAST_PDF_URI = "last_pdf_uri"
+        private const val THEME_PREF = "theme_preference"  // Add this
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -90,10 +91,19 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         // Initialize PDFBox
         PDFBoxResourceLoader.init(applicationContext)
         
+        // Load saved theme preference before initializing PDF view
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        isDarkMode = prefs.getBoolean(THEME_PREF, 
+            (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        )
+        
+        // Initialize PDF view with saved theme
+        pdfView = binding.pdfView
+        pdfView.setNightMode(isDarkMode)
+        pdfView.setBackgroundColor(if (isDarkMode) Color.BLACK else Color.WHITE)
+        
         // Initialize Text-to-Speech
         tts = TextToSpeech(this, this)
-        
-        pdfView = binding.pdfView
         
         // Check for intent first
         if (intent?.action == Intent.ACTION_VIEW && intent.data != null) {
@@ -275,17 +285,22 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             .defaultPage(pageNumber)
             .enableSwipe(true)
             .swipeHorizontal(false)
+            .pageSnap(true)
+            .autoSpacing(true)
+            .pageFling(true)
             .enableDoubletap(true)
+            .enableAnnotationRendering(false)
+            .scrollHandle(DefaultScrollHandle(this))
+            .spacing(10)
             .nightMode(isDarkMode)
             .onLoad { 
-                // Force redraw if in dark mode
-                if (isDarkMode) {
-                    pdfView.post {
+                // Force refresh after loading
+                pdfView.post {
+                    if (isDarkMode) {
                         val currentPage = pdfView.currentPage
                         pdfView.jumpTo(currentPage)
                     }
                 }
-                // ... rest of onLoad code ... 
             }
             .load()
     }
@@ -1002,7 +1017,34 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     private fun toggleTheme() {
         isDarkMode = !isDarkMode
-        updateTheme()
+        
+        // Save theme preference
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .putBoolean(THEME_PREF, isDarkMode)
+            .apply()
+            
+        // Force theme change by toggling twice if in dark mode
+        if (isDarkMode) {
+            pdfView.setNightMode(false)
+            pdfView.setBackgroundColor(Color.WHITE)
+            currentUri?.let { uri ->
+                val currentPage = pdfView.currentPage
+                loadPdfWithCurrentSettings(uri, currentPage)
+            }
+            
+            // Toggle back to dark after a short delay
+            pdfView.postDelayed({
+                pdfView.setNightMode(true)
+                pdfView.setBackgroundColor(Color.BLACK)
+                currentUri?.let { uri ->
+                    val currentPage = pdfView.currentPage
+                    loadPdfWithCurrentSettings(uri, currentPage)
+                }
+            }, 100)
+        } else {
+            updateTheme()
+        }
     }
 
     private fun updateTheme() {
