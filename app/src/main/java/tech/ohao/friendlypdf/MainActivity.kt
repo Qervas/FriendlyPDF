@@ -60,6 +60,8 @@ import android.graphics.pdf.PdfRenderer
 import android.graphics.pdf.PdfDocument
 import java.io.File
 import java.io.FileOutputStream
+import androidx.interpolator.view.animation.FastOutSlowInInterpolator
+import android.view.animation.AnticipateInterpolator
 
 // Make PageSize public by moving it outside the file-level scope
 data class PageSize(val width: Float, val height: Float)
@@ -928,7 +930,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Add theme FAB to the list of FABs to animate
-        val fabs = listOf(binding.fabAdd, binding.fabRead, binding.fabLanguage, binding.fabTheme)
+        val fabs = listOf(binding.fabAdd, binding.fabRead, binding.fabLanguage, binding.fabTheme, binding.fabBookshelf)
         
         fabs.forEachIndexed { index, fab ->
             if (isFabMenuExpanded) {
@@ -960,23 +962,25 @@ class MainActivity : AppCompatActivity() {
         val rotation = if (isFabMenuExpanded) 45f else 0f
         binding.fabMain.animate().rotation(rotation).setDuration(200)
         
-        val fabs = listOf(binding.fabAdd, binding.fabRead, binding.fabLanguage, binding.fabTheme)
+        // Reverse the order of FABs
+        val fabs = listOf(binding.fabBookshelf, binding.fabTheme, binding.fabLanguage, binding.fabRead, binding.fabAdd)
         
         fabs.forEachIndexed { index, fab ->
             if (isFabMenuExpanded) {
-                // Remove default animation
                 fab.alpha = 1f
                 fab.visibility = View.VISIBLE
                 fab.animate()
-                    .translationY(-((index + 1) * 16 + index * 56).toFloat())
-                    .setDuration(200)
-                    .withLayer()  // This helps prevent unwanted overlays
+                    .translationY(-((index + 1) * 80).toFloat()) // Increased spacing
+                    .setDuration(300) // Slightly longer animation
+                    .setInterpolator(FastOutSlowInInterpolator()) // Smooth opening animation
+                    .withLayer()
                     .start()
             } else {
                 fab.animate()
                     .translationY(0f)
                     .setDuration(200)
-                    .withLayer()  // This helps prevent unwanted overlays
+                    .setInterpolator(AnticipateInterpolator()) // Add anticipation when closing
+                    .withLayer()
                     .withEndAction {
                         if (!isFabMenuExpanded) {
                             fab.visibility = View.GONE

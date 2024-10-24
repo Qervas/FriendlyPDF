@@ -30,13 +30,27 @@
         android:clipChildren="false"
         android:clipToPadding="false">
 
+        <!-- Bookshelf FAB -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/fabBookshelf"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|end"
+            android:layout_marginBottom="400dp"
+            android:visibility="gone"
+            android:contentDescription="Bookshelf"
+            app:fabSize="mini"
+            app:tint="@android:color/white"
+            app:backgroundTint="#00BFA5"
+            app:srcCompat="@drawable/ic_bookshelf" />
+
         <!-- Theme FAB -->
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/fabTheme"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|end"
-            android:layout_marginBottom="272dp"
+            android:layout_marginBottom="320dp"
             android:visibility="gone"
             android:contentDescription="@string/toggle_theme"
             app:fabSize="mini"
@@ -50,7 +64,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|end"
-            android:layout_marginBottom="208dp"
+            android:layout_marginBottom="240dp"
             android:visibility="gone"
             android:contentDescription="@string/change_language"
             app:fabSize="mini"
@@ -64,7 +78,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|end"
-            android:layout_marginBottom="144dp"
+            android:layout_marginBottom="160dp"
             android:visibility="gone"
             android:contentDescription="@string/start_reading"
             app:fabSize="mini"
@@ -97,15 +111,6 @@
             app:tint="@android:color/white"
             app:backgroundTint="#6200EE"
             app:srcCompat="@drawable/baseline_menu_24" />
-
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/fabBookshelf"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_margin="16dp"
-            android:src="@drawable/ic_bookshelf"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"/>
 
     </FrameLayout>
 
@@ -159,6 +164,17 @@
             android:layout_marginBottom="28dp"
             android:visibility="gone"
             android:text="@string/add_pdf"
+            android:background="@drawable/fab_label_background"
+            android:padding="8dp"
+            android:textColor="@android:color/white"/>
+
+        <TextView
+            android:id="@+id/label_bookshelf"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="28dp"
+            android:visibility="gone"
+            android:text="Bookshelf"
             android:background="@drawable/fab_label_background"
             android:padding="8dp"
             android:textColor="@android:color/white"/>

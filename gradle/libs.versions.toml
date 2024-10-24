@@ -10,6 +10,7 @@ material = "1.12.0"
 photoview = "2.3.0"
 roomCommon = "2.6.1"
 roomKtx = "2.6.1"
+coreAnimation = "1.0.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -21,6 +22,7 @@ androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-co
 photoview = { module = "com.github.chrisbanes:PhotoView", version.ref = "photoview" }
 androidx-room-common = { group = "androidx.room", name = "room-common", version.ref = "roomCommon" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "roomKtx" }
+androidx-core-animation = { group = "androidx.core", name = "core-animation", version.ref = "coreAnimation" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

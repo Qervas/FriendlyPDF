@@ -50,6 +50,7 @@ dependencies {
     implementation("com.github.mhiew:android-pdf-viewer:3.2.0-beta.1")
     implementation(libs.androidx.room.common)
     implementation(libs.androidx.room.ktx)
+    implementation(libs.androidx.core.animation)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
