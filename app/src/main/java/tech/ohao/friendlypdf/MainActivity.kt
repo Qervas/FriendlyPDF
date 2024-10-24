@@ -350,9 +350,10 @@ class MainActivity : AppCompatActivity() {
                     currentPage = page
                     updatePageNumber(page + 1, pageCount)
                     Log.d("PDF_READER", "Page changed to: ${page + 1}")
-                    // Save the current page number
+                    // Update the current page number
                     lifecycleScope.launch(Dispatchers.IO) {
-                        database.bookDao().insertBook(openedBook.copy(lastPageRead = page))
+                        val updatedBook = openedBook.copy(lastPageRead = page, lastReadTimestamp = System.currentTimeMillis())
+                        database.bookDao().updateBook(updatedBook)
                     }
                 }
                 .enableSwipe(true)
@@ -1186,7 +1187,7 @@ class MainActivity : AppCompatActivity() {
             if (existingBook != null) {
                 // Update the last read timestamp
                 val updatedBook = existingBook.copy(lastReadTimestamp = System.currentTimeMillis())
-                database.bookDao().insertBook(updatedBook)
+                database.bookDao().updateBook(updatedBook)
                 Log.d("BookshelfDebug", "Updated existing book: ${updatedBook.title}")
                 updatedBook
             } else {

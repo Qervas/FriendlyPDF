@@ -22,4 +22,7 @@ interface BookDao {
 
     @Query("SELECT * FROM books WHERE id = :id LIMIT 1")
     suspend fun getBookById(id: Long): Book?
+
+    @Update
+    suspend fun updateBook(book: Book)
 }
