@@ -42,6 +42,18 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.ServiceConnection
 import android.os.IBinder
+import tech.ohao.friendlypdf.BookshelfActivity
+import androidx.room.Room
+import androidx.room.RoomDatabase
+import androidx.room.Database
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.Query
+import android.content.ContentResolver
+import android.database.Cursor
+import android.provider.OpenableColumns
 
 // Make PageSize public by moving it outside the file-level scope
 data class PageSize(val width: Float, val height: Float)
@@ -96,6 +108,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private lateinit var database: AppDatabase
+
     companion object {
         private const val PREFS_NAME = "FriendlyPDFPrefs"
         private const val LAST_PDF_URI = "last_pdf_uri"
@@ -107,6 +121,9 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        
+        // Initialize database
+        database = AppDatabase.getInstance(applicationContext)
         
         // Initialize PDFBox
         PDFBoxResourceLoader.init(applicationContext)
@@ -147,6 +164,14 @@ class MainActivity : AppCompatActivity() {
                 loadPdfWithCurrentSettings(uri, lastPageNumber)
             }
         }
+
+        setupBookshelfFab()
+
+        // Handle the intent to open a new book
+        intent?.data?.let { uri ->
+            handleBookOpening(uri)
+            loadPdfWithCurrentSettings(uri, 0)
+        }
     }
 
     private fun loadLastOpenedPDF() {
@@ -178,6 +203,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadPDF(uri: Uri) {
         currentUri = uri
+        
+        // Add this line to handle book database entry
+        handleBookOpening(uri)
         
         // Save this URI as the last opened PDF
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
@@ -288,6 +316,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadPdfWithCurrentSettings(uri: Uri, pageNumber: Int = 0) {
         currentUri = uri
+        
+        // Add this line to handle book database entry
+        handleBookOpening(uri)
+        
         Log.d("PDF_READER", "Loading PDF with page number: $pageNumber")
         pdfView.fromUri(uri)
             .defaultPage(pageNumber)
@@ -1113,6 +1145,51 @@ class MainActivity : AppCompatActivity() {
         setIntent(intent)
         intent?.data?.let { uri ->
             loadPdfWithCurrentSettings(uri, 0)  // Start from page 0 for new PDFs
+        }
+    }
+
+    private fun setupBookshelfFab() {
+        binding.fabBookshelf.setOnClickListener {
+            val intent = Intent(this, BookshelfActivity::class.java)
+            startActivity(intent)
+        }
+    }
+
+    private fun handleBookOpening(uri: Uri) {
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                val existingBook = database.bookDao().getBookByUri(uri.toString())
+                if (existingBook != null) {
+                    // Update the last read timestamp
+                    database.bookDao().insertBook(
+                        existingBook.copy(lastReadTimestamp = System.currentTimeMillis())
+                    )
+                    Log.d("BookshelfDebug", "Updated existing book: ${existingBook.title}")
+                } else {
+                    // Add a new book
+                    val bookTitle = extractBookName(uri)
+                    val newBook = Book(
+                        title = bookTitle,
+                        uri = uri.toString(),
+                        lastPageRead = 0,
+                        lastReadTimestamp = System.currentTimeMillis()
+                    )
+                    database.bookDao().insertBook(newBook)
+                    Log.d("BookshelfDebug", "Added new book: $bookTitle")
+                }
+            }
+        }
+    }
+
+    private fun extractBookName(uri: Uri): String {
+        return if (uri.scheme == ContentResolver.SCHEME_CONTENT) {
+            contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                cursor.moveToFirst()
+                cursor.getString(nameIndex)
+            } ?: "Unknown Book"
+        } else {
+            uri.lastPathSegment?.substringAfterLast('/') ?: "Unknown Book"
         }
     }
 }

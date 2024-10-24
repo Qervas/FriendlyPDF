@@ -41,5 +41,9 @@
                 <data android:mimeType="application/pdf" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".BookshelfActivity"
+            android:exported="false" />
     </application>
 </manifest>
