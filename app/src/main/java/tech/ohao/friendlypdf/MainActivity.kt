@@ -38,14 +38,18 @@ import com.tom_roush.pdfbox.text.TextPosition
 import kotlinx.coroutines.delay
 import android.graphics.Color
 import android.content.res.Configuration
+import android.content.ComponentName
+import android.content.Context
+import android.content.ServiceConnection
+import android.os.IBinder
 
 // Make PageSize public by moving it outside the file-level scope
 data class PageSize(val width: Float, val height: Float)
 
-class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
+class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var pdfView: PDFView
-    private lateinit var tts: TextToSpeech
+    private var ttsService: TTSService? = null
     private var isSpeaking = false
     private var currentPage = 0
     private val PICK_PDF_FILE = 2
@@ -77,6 +81,21 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     // Add to the class properties
     private var isDarkMode = false
 
+    private var isTTSServiceBound = false
+
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            val binder = service as TTSService.TTSBinder
+            ttsService = binder.getService()
+            isTTSServiceBound = true
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            ttsService = null
+            isTTSServiceBound = false
+        }
+    }
+
     companion object {
         private const val PREFS_NAME = "FriendlyPDFPrefs"
         private const val LAST_PDF_URI = "last_pdf_uri"
@@ -87,6 +106,12 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        
+        // Start and bind to TTS Service
+        Intent(this, TTSService::class.java).also { intent ->
+            startService(intent)
+            bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+        }
         
         // Initialize PDFBox
         PDFBoxResourceLoader.init(applicationContext)
@@ -101,9 +126,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         pdfView = binding.pdfView
         pdfView.setNightMode(isDarkMode)
         pdfView.setBackgroundColor(if (isDarkMode) Color.BLACK else Color.WHITE)
-        
-        // Initialize Text-to-Speech
-        tts = TextToSpeech(this, this)
         
         // Check for intent first
         if (intent?.action == Intent.ACTION_VIEW && intent.data != null) {
@@ -297,11 +319,13 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     private fun setAppLanguage(locale: Locale) {
-        // Update TTS language without recreating activity
-        val result = tts.setLanguage(locale)
-        if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-            Toast.makeText(this, getString(R.string.language_not_supported), Toast.LENGTH_SHORT).show()
-            return
+        // Update TTS language
+        ttsService?.let { service ->
+            val result = service.setLanguage(locale)
+            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                Toast.makeText(this, getString(R.string.language_not_supported), Toast.LENGTH_SHORT).show()
+                return
+            }
         }
         
         // Update app locale without recreation
@@ -324,18 +348,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             btnClose.contentDescription = getString(R.string.hide_controls)
         }
         // ... update other UI elements ...
-    }
-
-    override fun onInit(status: Int) {
-        if (status == TextToSpeech.SUCCESS) {
-            // Set language to match system or default to English
-            val result = tts.setLanguage(Locale.getDefault())
-            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                Toast.makeText(this, R.string.language_not_supported, Toast.LENGTH_SHORT).show()
-            }
-        } else {
-            Toast.makeText(this, R.string.tts_init_failed, Toast.LENGTH_SHORT).show()
-        }
     }
 
     private fun toggleReading() {
@@ -397,7 +409,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     private fun startReading() {
-        if (!::tts.isInitialized || currentUri == null) return
+        if (currentUri == null) return
         
         lifecycleScope.launch(Dispatchers.IO) {
             try {
@@ -405,10 +417,12 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     Toast.makeText(this@MainActivity, R.string.processing_pdf, Toast.LENGTH_SHORT).show()
                 }
                 
+                Log.d("PDF_READER", "Starting to read page ${pdfView.currentPage}")
                 readPage(pdfView.currentPage)
                 
                 withContext(Dispatchers.Main) {
                     if (sentences.isNotEmpty()) {
+                        Log.d("PDF_READER", "Sentences extracted: ${sentences.size}")
                         isSpeaking = true
                         currentReadingIndex = 0
                         lastSentenceStartTime = System.currentTimeMillis()
@@ -419,14 +433,20 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                         
                         startTimeUpdateTimer()
                         
-                        tts.setSpeechRate(speechRate)
+                        Log.d("PDF_READER", "Setting speech rate: $speechRate")
+                        ttsService?.setSpeechRate(speechRate)
                         currentSentence = sentences[0]
-                        updateTimeRemaining() // Show fixed time estimate for the page
+                        updateTimeRemaining()
                         highlightCurrentSentence(currentSentence)
-                        tts.speak(currentSentence, TextToSpeech.QUEUE_FLUSH, null, "0")
                         
-                        tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                        val params = Bundle()
+                        params.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "0")
+                        Log.d("PDF_READER", "Starting to speak: $currentSentence")
+                        ttsService?.speak(currentSentence, TextToSpeech.QUEUE_FLUSH, params, "0")
+                        
+                        ttsService?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                             override fun onStart(utteranceId: String) {
+                                Log.d("PDF_READER", "Started utterance: $utteranceId")
                                 utteranceId.toIntOrNull()?.let { index ->
                                     currentReadingIndex = index
                                     currentSentence = sentences[index]
@@ -439,11 +459,12 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                             }
 
                             override fun onDone(utteranceId: String) {
+                                Log.d("PDF_READER", "Finished utterance: $utteranceId")
                                 utteranceId.toIntOrNull()?.let { index ->
                                     if (index < sentences.size - 1) {
                                         currentSentence = sentences[index + 1]
                                         highlightCurrentSentence(currentSentence)
-                                        tts.speak(currentSentence, TextToSpeech.QUEUE_FLUSH, null, (index + 1).toString())
+                                        ttsService?.speak(currentSentence, TextToSpeech.QUEUE_FLUSH, null, (index + 1).toString())
                                     } else {
                                         runOnUiThread {
                                             if (pdfView.currentPage < pdfView.pageCount - 1) {
@@ -461,12 +482,15 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                             }
 
                             override fun onError(utteranceId: String) {
-                                Log.e("TTS", "Error with utterance $utteranceId")
+                                Log.e("PDF_READER", "Error with utterance $utteranceId")
                             }
                         })
+                    } else {
+                        Log.w("PDF_READER", "No sentences extracted from the current page")
                     }
                 }
             } catch (e: Exception) {
+                Log.e("PDF_READER", "Error in startReading", e)
                 withContext(Dispatchers.Main) {
                     Toast.makeText(
                         this@MainActivity,
@@ -511,7 +535,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                         binding.mediaControls.audioProgress.progress = 0
                         updateTimeRemaining() // Update fixed time for new page
                         highlightCurrentSentence(currentSentence)
-                        tts.speak(currentSentence, TextToSpeech.QUEUE_FLUSH, null, "0")
+                        ttsService?.speak(currentSentence, TextToSpeech.QUEUE_FLUSH, null, "0")
                     }
                 }
             } catch (e: Exception) {
@@ -546,19 +570,17 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         timeUpdateTimer?.cancel()
         timeUpdateTimer = null
         
-        if (::tts.isInitialized) {
-            tts.stop()
-            isSpeaking = false
-            currentSentence = ""
-            clearHighlight()
-            binding.mediaControls.btnPlayPause.setImageResource(R.drawable.baseline_play_arrow_24)
-            binding.mediaControls.audioProgress.progress = 0
-            binding.mediaControls.timeRemaining.text = String.format(
-                getString(R.string.time_remaining),
-                0,
-                0
-            )
-        }
+        ttsService?.stop()
+        isSpeaking = false
+        currentSentence = ""
+        clearHighlight()
+        binding.mediaControls.btnPlayPause.setImageResource(R.drawable.baseline_play_arrow_24)
+        binding.mediaControls.audioProgress.progress = 0
+        binding.mediaControls.timeRemaining.text = String.format(
+            getString(R.string.time_remaining),
+            0,
+            0
+        )
     }
 
     private fun highlightCurrentSentence(sentence: String) {
@@ -745,7 +767,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     speechRate = (progress + 5) / 10f  // Range of 0.5x to 2.5x
                     speedText.text = String.format("%.1fx", speechRate)
                     if (isSpeaking) {
-                        tts.setSpeechRate(speechRate)
+                        ttsService?.setSpeechRate(speechRate)
                     }
                 }
 
@@ -778,13 +800,13 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
                 override fun onStartTrackingTouch(seekBar: SeekBar) {
                     if (isSpeaking) {
-                        tts.stop()
+                        ttsService?.stop()
                     }
                 }
 
                 override fun onStopTrackingTouch(seekBar: SeekBar) {
                     if (isSpeaking) {
-                        tts.speak(currentSentence, TextToSpeech.QUEUE_FLUSH, null, currentReadingIndex.toString())
+                        ttsService?.speak(currentSentence, TextToSpeech.QUEUE_FLUSH, null, currentReadingIndex.toString())
                     }
                 }
             })
@@ -947,12 +969,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     4 -> Locale("sv") // Swedish
                     else -> Locale.getDefault()
                 }
-                tts.language = locale
-                // Check if language is available
-                val result = tts.setLanguage(locale)
-                if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                    Toast.makeText(this, getString(R.string.language_not_supported), Toast.LENGTH_SHORT).show()
-                }
+                setAppLanguage(locale)
             }
             .show()
     }
@@ -969,9 +986,11 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     override fun onDestroy() {
-        timeUpdateTimer?.cancel()
-        tts.stop()
-        tts.shutdown()
+        ttsService?.stop()
+        if (isTTSServiceBound) {
+            unbindService(serviceConnection)
+            isTTSServiceBound = false
+        }
         super.onDestroy()
     }
 
