@@ -162,7 +162,19 @@ class MainActivity : AppCompatActivity() {
 
         // Load last opened PDF or handle incoming intent
         if (intent?.action == Intent.ACTION_VIEW && intent.data != null) {
-            loadPDF(intent.data!!)
+            val bookId = intent.getLongExtra("BOOK_ID", -1L)
+            if (bookId != -1L) {
+                lifecycleScope.launch {
+                    val book = withContext(Dispatchers.IO) {
+                        database.bookDao().getBookById(bookId)
+                    }
+                    book?.let {
+                        loadPdfWithCurrentSettings(Uri.parse(it.uri), it.lastPageRead, it)
+                    }
+                }
+            } else {
+                loadPDF(intent.data!!)
+            }
         } else {
             val lastPdfUri = prefs.getString(LAST_PDF_URI, null)
             val lastPageNumber = prefs.getInt(LAST_PAGE_NUMBER, 0)
@@ -177,8 +189,10 @@ class MainActivity : AppCompatActivity() {
 
         // Handle the intent to open a new book
         intent?.data?.let { uri ->
-            handleBookOpening(uri)
-            loadPdfWithCurrentSettings(uri, 0)
+            lifecycleScope.launch {
+                val book = handleBookOpening(uri)
+                loadPdfWithCurrentSettings(uri, book.lastPageRead, book)
+            }
         }
     }
 
@@ -212,9 +226,6 @@ class MainActivity : AppCompatActivity() {
     private fun loadPDF(uri: Uri) {
         currentUri = uri
         
-        // Add this line to handle book database entry
-        handleBookOpening(uri)
-        
         // Save this URI as the last opened PDF
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             .edit()
@@ -231,6 +242,9 @@ class MainActivity : AppCompatActivity() {
                     ).show()
                 }
 
+                // Handle book database entry
+                val book = handleBookOpening(uri)
+
                 // If in dark mode, force a theme cycle to ensure proper rendering
                 if (isDarkMode) {
                     pdfView.post {
@@ -241,11 +255,11 @@ class MainActivity : AppCompatActivity() {
                         pdfView.postDelayed({
                             pdfView.setNightMode(true)
                             pdfView.setBackgroundColor(Color.BLACK)
-                            loadPdfWithCurrentSettings(uri, 0)
+                            loadPdfWithCurrentSettings(uri, book.lastPageRead, book)
                         }, 100)
                     }
                 } else {
-                    loadPdfWithCurrentSettings(uri, 0)
+                    loadPdfWithCurrentSettings(uri, book.lastPageRead, book)
                 }
 
             } catch (e: Exception) {
@@ -322,39 +336,40 @@ class MainActivity : AppCompatActivity() {
         Toast.makeText(this, "Mode: ${currentViewMode.name}", Toast.LENGTH_SHORT).show()
     }
 
-    private fun loadPdfWithCurrentSettings(uri: Uri, pageNumber: Int = 0) {
+    private fun loadPdfWithCurrentSettings(uri: Uri, pageNumber: Int = 0, book: Book? = null) {
         currentUri = uri
         
-        // Add this line to handle book database entry
-        handleBookOpening(uri)
-        
-        Log.d("PDF_READER", "Loading PDF with page number: $pageNumber")
-        pdfView.fromUri(uri)
-            .defaultPage(pageNumber)
-            .onPageChange { page, pageCount ->
-                currentPage = page
-                updatePageNumber(page + 1, pageCount)
-                Log.d("PDF_READER", "Page changed to: ${page + 1}")
-                // Save the current page number
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().apply {
-                    putInt(LAST_PAGE_NUMBER, page)
-                    apply()
+        lifecycleScope.launch {
+            val openedBook = book ?: handleBookOpening(uri)
+            val startPage = book?.lastPageRead ?: pageNumber
+            
+            Log.d("PDF_READER", "Loading PDF with page number: $startPage")
+            pdfView.fromUri(uri)
+                .defaultPage(startPage)
+                .onPageChange { page, pageCount ->
+                    currentPage = page
+                    updatePageNumber(page + 1, pageCount)
+                    Log.d("PDF_READER", "Page changed to: ${page + 1}")
+                    // Save the current page number
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        database.bookDao().insertBook(openedBook.copy(lastPageRead = page))
+                    }
                 }
-            }
-            .enableSwipe(true)
-            .swipeHorizontal(false)
-            .pageSnap(true)
-            .autoSpacing(true)
-            .pageFling(true)
-            .enableDoubletap(true)
-            .enableAnnotationRendering(false)
-            .scrollHandle(DefaultScrollHandle(this))
-            .spacing(10)
-            .nightMode(isDarkMode)
-            .onLoad { 
-                Log.d("PDF_READER", "PDF loaded, current page: ${pdfView.currentPage}")
-            }
-            .load()
+                .enableSwipe(true)
+                .swipeHorizontal(false)
+                .pageSnap(true)
+                .autoSpacing(true)
+                .pageFling(true)
+                .enableDoubletap(true)
+                .enableAnnotationRendering(false)
+                .scrollHandle(DefaultScrollHandle(this@MainActivity))  // Use this@MainActivity instead of this
+                .spacing(10)
+                .nightMode(isDarkMode)
+                .onLoad { 
+                    Log.d("PDF_READER", "PDF loaded, current page: ${pdfView.currentPage}")
+                }
+                .load()
+        }
     }
 
     private fun setAppLanguage(locale: Locale) {
@@ -1165,31 +1180,29 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun handleBookOpening(uri: Uri) {
-        lifecycleScope.launch {
-            withContext(Dispatchers.IO) {
-                val existingBook = database.bookDao().getBookByUri(uri.toString())
-                if (existingBook != null) {
-                    // Update the last read timestamp
-                    database.bookDao().insertBook(
-                        existingBook.copy(lastReadTimestamp = System.currentTimeMillis())
-                    )
-                    Log.d("BookshelfDebug", "Updated existing book: ${existingBook.title}")
-                } else {
-                    // Add a new book
-                    val bookTitle = extractBookName(uri)
-                    // Generate thumbnail when adding new book
-                    val thumbnail = generateThumbnail(uri)
-                    val newBook = Book(
-                        title = bookTitle,
-                        uri = uri.toString(),
-                        lastPageRead = 0,
-                        lastReadTimestamp = System.currentTimeMillis(),
-                        thumbnailPath = thumbnail // Add this new field to store thumbnail path
-                    )
-                    database.bookDao().insertBook(newBook)
-                    Log.d("BookshelfDebug", "Added new book: $bookTitle")
-                }
+    private suspend fun handleBookOpening(uri: Uri): Book {
+        return withContext(Dispatchers.IO) {
+            val existingBook = database.bookDao().getBookByUri(uri.toString())
+            if (existingBook != null) {
+                // Update the last read timestamp
+                val updatedBook = existingBook.copy(lastReadTimestamp = System.currentTimeMillis())
+                database.bookDao().insertBook(updatedBook)
+                Log.d("BookshelfDebug", "Updated existing book: ${updatedBook.title}")
+                updatedBook
+            } else {
+                // Add a new book
+                val bookTitle = extractBookName(uri)
+                val thumbnail = generateThumbnail(uri)
+                val newBook = Book(
+                    title = bookTitle,
+                    uri = uri.toString(),
+                    lastPageRead = 0,
+                    lastReadTimestamp = System.currentTimeMillis(),
+                    thumbnailPath = thumbnail
+                )
+                database.bookDao().insertBook(newBook)
+                Log.d("BookshelfDebug", "Added new book: $bookTitle")
+                newBook
             }
         }
     }

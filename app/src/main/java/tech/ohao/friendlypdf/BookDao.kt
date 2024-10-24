@@ -19,4 +19,7 @@ interface BookDao {
     // Add this debug function
     @Query("SELECT COUNT(*) FROM books")
     suspend fun getBookCount(): Int
+
+    @Query("SELECT * FROM books WHERE id = :id LIMIT 1")
+    suspend fun getBookById(id: Long): Book?
 }

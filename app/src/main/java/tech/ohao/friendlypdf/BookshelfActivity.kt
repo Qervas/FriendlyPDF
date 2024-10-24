@@ -89,6 +89,7 @@ class BookshelfActivity : AppCompatActivity() {
     private fun onBookClick(book: Book) {
         val intent = Intent(this, MainActivity::class.java).apply {
             data = Uri.parse(book.uri)
+            putExtra("BOOK_ID", book.id)
         }
         startActivity(intent)
     }
