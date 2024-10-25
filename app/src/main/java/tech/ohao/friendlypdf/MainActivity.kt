@@ -4,8 +4,6 @@ import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.view.Menu
-import android.view.MenuItem
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.github.barteksc.pdfviewer.PDFView
@@ -62,6 +60,7 @@ import java.io.File
 import java.io.FileOutputStream
 import androidx.interpolator.view.animation.FastOutSlowInInterpolator
 import android.view.animation.AnticipateInterpolator
+import android.speech.tts.Voice
 
 // Make PageSize public by moving it outside the file-level scope
 data class PageSize(val width: Float, val height: Float)
@@ -118,6 +117,17 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var database: AppDatabase
 
+    // Add to existing properties
+    private var fabVoice: FloatingActionButton? = null
+    
+    // Add these properties near the top of the class with other properties
+    private var volume = 1.0f
+    private var pitch = 1.0f
+    private val ssmlEnabled = true
+
+    // Add near the top with other properties
+    private var currentVoice: Voice? = null
+
     companion object {
         const val PREFS_NAME = "FriendlyPDFPrefs"
         private const val LAST_PDF_URI = "last_pdf_uri"
@@ -156,6 +166,9 @@ class MainActivity : AppCompatActivity() {
             startService(intent)
             bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
         }
+
+        // Initialize saved voice preference after service binding
+        initializeTTSWithSavedVoice()
 
         // Load last opened PDF or handle incoming intent
         if (intent?.action == Intent.ACTION_VIEW && intent.data != null) {
@@ -492,10 +505,27 @@ class MainActivity : AppCompatActivity() {
                         updateTimeRemaining()
                         highlightCurrentSentence(currentSentence)
                         
-                        val params = Bundle()
-                        params.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "0")
-                        Log.d("PDF_READER", "Starting to speak: $currentSentence")
-                        ttsService?.speak(currentSentence, TextToSpeech.QUEUE_FLUSH, params, "0")
+                        // Enhanced speech parameters
+                        val params = Bundle().apply {
+                            putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "0")
+                            // Use the correct constant keys for TTS parameters
+                            putFloat("volume", volume)  // Custom parameter for volume
+                            putFloat("pitch", pitch)    // Custom parameter for pitch
+                            
+                            // Add breathing room between sentences
+                            putString(TextToSpeech.Engine.KEY_FEATURE_NETWORK_SYNTHESIS, "true")
+                            putString(TextToSpeech.Engine.KEY_PARAM_STREAM, 
+                                android.media.AudioManager.STREAM_MUSIC.toString())
+                        }
+
+                        // Format text with SSML if supported
+                        val textToSpeak = if (ssmlEnabled) {
+                            formatWithSSML(currentSentence)
+                        } else {
+                            currentSentence
+                        }
+
+                        ttsService?.speak(textToSpeak, TextToSpeech.QUEUE_FLUSH, params, "0")
                         
                         ttsService?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                             override fun onStart(utteranceId: String) {
@@ -863,6 +893,10 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             })
+
+            btnVoice.setOnClickListener {
+                showVoiceSelectionDialog()
+            }
         }
     }
 
@@ -943,22 +977,31 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Add theme FAB to the list of FABs to animate
-        val fabs = listOf(binding.fabAdd, binding.fabRead, binding.fabLanguage, binding.fabTheme, binding.fabBookshelf)
+        // Define all FABs in a single list
+        val fabs = listOf(
+            binding.fabBookshelf,
+            binding.fabTheme,
+            binding.fabLanguage,
+            binding.fabRead,
+            binding.fabAdd
+        )
         
+        // Animate FABs
         fabs.forEachIndexed { index, fab ->
             if (isFabMenuExpanded) {
                 fab.alpha = 1f
                 fab.visibility = View.VISIBLE
                 fab.animate()
-                    .translationY(-((index + 1) * 16 + index * 56).toFloat())
-                    .setDuration(200)
+                    .translationY(-((index + 1) * 80).toFloat())
+                    .setDuration(300)
+                    .setInterpolator(FastOutSlowInInterpolator())
                     .withLayer()
                     .start()
             } else {
                 fab.animate()
                     .translationY(0f)
                     .setDuration(200)
+                    .setInterpolator(AnticipateInterpolator())
                     .withLayer()
                     .withEndAction {
                         if (!isFabMenuExpanded) {
@@ -1124,13 +1167,6 @@ class MainActivity : AppCompatActivity() {
         val currentPage = pdfView.currentPage
         pdfView.jumpTo(currentPage)
 
-        // Update other UI elements if needed
-        binding.mediaControls.root.setBackgroundColor(
-            if (isDarkMode) Color.parseColor("#1A1A1A") else Color.WHITE
-        )
-        binding.mediaControls.timeRemaining.setTextColor(
-            if (isDarkMode) Color.WHITE else Color.BLACK
-        )
     }
 
     private fun checkSystemTheme() {
@@ -1270,5 +1306,183 @@ class MainActivity : AppCompatActivity() {
             Log.e("MainActivity", "Error generating thumbnail", e)
             null
         }
+    }
+
+    private fun showVoiceSelectionDialog() {
+        ttsService?.let { service ->
+            val voices: List<Voice> = service.voices?.toList()?.let { voiceList ->
+                voiceList
+                    .filter { voice -> 
+                        // Improved language filtering
+                        voice.name.let { name ->
+                            name.contains("-en-", ignoreCase = true) ||
+                            name.contains("en-US", ignoreCase = true) ||
+                            name.contains("en-GB", ignoreCase = true) ||
+                            name.contains("en-AU", ignoreCase = true) ||
+                            name.contains("en-IN", ignoreCase = true) ||
+                            name.contains("en-CA", ignoreCase = true) ||
+                            name.contains("-fr-", ignoreCase = true) ||
+                            name.contains("fr-FR", ignoreCase = true) ||
+                            name.contains("-de-", ignoreCase = true) ||
+                            name.contains("de-DE", ignoreCase = true) ||
+                            name.contains("-sv-", ignoreCase = true) ||
+                            name.contains("sv-SE", ignoreCase = true) ||
+                            name.contains("-zh-", ignoreCase = true) ||
+                            name.contains("zh-CN", ignoreCase = true)
+                        }
+                    }
+                    .sortedWith(compareBy { voice ->
+                        if (voice.name.contains("network", ignoreCase = true)) 0 else 1
+                    })
+            } ?: return
+            
+            val voiceItems = voices.mapIndexed { index, voice: Voice ->
+                val languageCode = voice.name.substringAfter("-").substringBefore("-")
+                val (languageName, languageFlag) = when {
+                    voice.name.contains("us", ignoreCase = true) -> Pair("US", "🇺🇸")
+                    voice.name.contains("gb", ignoreCase = true) -> Pair("GB", "🇬🇧")
+                    voice.name.contains("au", ignoreCase = true) -> Pair("AU", "🇦🇺")
+                    voice.name.contains("in", ignoreCase = true) -> Pair("IN", "🇮🇳")
+                    voice.name.contains("ca", ignoreCase = true) -> Pair("CA", "🇨🇦")
+                    voice.name.contains("ie", ignoreCase = true) -> Pair("IE", "🇮🇪")
+                    voice.name.contains("nz", ignoreCase = true) -> Pair("NZ", "🇳🇿")
+                    voice.name.contains("za", ignoreCase = true) -> Pair("ZA", "🇿🇦")
+                    voice.name.contains("de", ignoreCase = true) -> Pair("DE", "🇩🇪")
+                    voice.name.contains("fr", ignoreCase = true) -> Pair("FR", "🇫🇷")
+                    voice.name.contains("se", ignoreCase = true) -> Pair("SE", "🇸🇪")
+                    voice.name.contains("cn", ignoreCase = true) -> Pair("CN", "🇨🇳")
+                    else -> Pair("US", "🇺🇸") // Default
+                }
+
+                val type = if (voice.name.contains("network", ignoreCase = true)) {
+                    "🌐"
+                } else {
+                    "📱"
+                }
+                buildString {
+                    append("#")
+                    append(index + 1)
+                    append(" ")
+                    append(type)
+                    append(" ")
+                    append(languageName)
+                    append(" ")
+                    append(languageFlag)
+                }
+            }.toTypedArray()
+            
+            // Log the available voices for debugging
+            voices.forEach { voice ->
+                Log.d("VoiceSelection", "Available voice: ${voice.name}")
+            }
+            
+            val currentIndex = voices.indexOf(currentVoice) 
+            
+            AlertDialog.Builder(this)
+                .setTitle(getString(R.string.select_voice))
+                .setSingleChoiceItems(
+                    voiceItems,
+                    currentIndex,
+                    { dialog, which -> 
+                        val selectedVoice = voices[which]
+                        service.voice = selectedVoice
+                        currentVoice = selectedVoice
+                        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                            .edit()
+                            .putString("preferred_voice", selectedVoice.name)
+                            .apply()
+                        dialog.dismiss()
+                    }
+                )
+                .show()
+        }
+    }
+
+    // Add new helper function for SSML formatting
+    private fun formatWithSSML(text: String): String {
+        return """
+            <speak>
+                <prosody rate="${speechRate}" pitch="medium" volume="loud">
+                    <break time="500ms"/>
+                    ${addEmphasis(text)}
+                    <break time="500ms"/>
+                </prosody>
+            </speak>
+        """.trimIndent()
+    }
+
+    // Add natural emphasis based on punctuation
+    private fun addEmphasis(text: String): String {
+        return text
+            .replace(". ", ". <break time='500ms'/>")
+            .replace("! ", "! <break time='700ms'/>")
+            .replace("? ", "? <break time='700ms'/>")
+            .replace(", ", ", <break time='300ms'/>")
+            .replace(": ", ": <break time='400ms'/>")
+            .replace("; ", "; <break time='400ms'/>")
+            // Add emphasis to quoted text
+            .replace(Regex("\"([^\"]*)\"")) { matchResult ->
+                "<emphasis level='moderate'>${matchResult.groupValues[1]}</emphasis>"
+            }
+    }
+
+    // Add method to initialize TTS with high-quality voice
+    private fun initializeTTSWithBestVoice() {
+        ttsService?.let { service ->
+            // Get available voices
+            val voices: Set<Voice>? = service.voices
+            
+            // Find the best available voice (prefer neural/high-quality voices)
+            val bestVoice = voices?.firstOrNull { voice: Voice ->
+                voice.name.contains("neural", ignoreCase = true) ||
+                voice.name.contains("premium", ignoreCase = true) ||
+                voice.name.contains("enhanced", ignoreCase = true)
+            } ?: voices?.firstOrNull()
+            
+            // Set the best available voice
+            bestVoice?.let { voice: Voice ->
+                service.voice = voice
+                currentVoice = voice  // Store the current voice
+            }
+        }
+    }
+
+    // Update the speech rate setting to be more natural
+    private fun updateSpeechRate(rate: Float) {
+        speechRate = when {
+            rate < 0.8f -> 0.8f  // Minimum rate for natural speech
+            rate > 2.0f -> 2.0f  // Maximum rate for comprehension
+            else -> rate
+        }
+        ttsService?.setSpeechRate(speechRate)
+    }
+
+    // Add this method to initialize with saved voice preference
+    private fun initializeTTSWithSavedVoice() {
+        ttsService?.let { service ->
+            val savedVoiceName = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                .getString("preferred_voice", null)
+                
+            if (savedVoiceName != null) {
+                service.voices?.find { it.name == savedVoiceName }?.let { voice: Voice ->
+                    service.voice = voice
+                    currentVoice = voice  // Store the current voice
+                }
+            } else {
+                // If no saved preference, initialize with best available voice
+                initializeTTSWithBestVoice()
+            }
+        }
+    }
+
+    // Add method to update pitch
+    private fun updatePitch(newPitch: Float) {
+        pitch = newPitch.coerceIn(0.5f, 2.0f)  // Keep pitch within reasonable bounds
+        ttsService?.setPitch(pitch)
+    }
+
+    // Add method to update volume
+    private fun updateVolume(newVolume: Float) {
+        volume = newVolume.coerceIn(0.0f, 1.0f)  // Keep volume between 0 and 1
     }
 }

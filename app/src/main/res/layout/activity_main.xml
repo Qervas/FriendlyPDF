@@ -112,6 +112,17 @@
             app:backgroundTint="#6200EE"
             app:srcCompat="@drawable/baseline_menu_24" />
 
+        <!-- Voice FAB -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/fabVoice"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:contentDescription="@string/select_voice"
+            android:src="@drawable/ic_voice"
+            android:visibility="gone"
+            app:fabSize="normal" />
+
     </FrameLayout>
 
     <!-- Optional: Labels for FABs -->

@@ -13,6 +13,7 @@ import android.speech.tts.UtteranceProgressListener
 import androidx.core.app.NotificationCompat
 import java.util.Locale
 import android.os.Bundle
+import android.speech.tts.Voice
 import android.util.Log
 
 class TTSService : Service(), TextToSpeech.OnInitListener {
@@ -23,6 +24,7 @@ class TTSService : Service(), TextToSpeech.OnInitListener {
     private var currentLanguage: Locale = Locale.getDefault()
     private var utteranceProgressListener: UtteranceProgressListener? = null
     private var isInitialized = false
+    private var currentVoice: Voice? = null
     
     // Language-related function
     fun setLanguage(locale: Locale): Int {
@@ -36,6 +38,17 @@ class TTSService : Service(), TextToSpeech.OnInitListener {
         set(value) {
             currentLanguage = value
             tts.language = value
+        }
+
+    // Add getter/setter for voices
+    val voices: Set<Voice>?
+        get() = tts.voices
+        
+    var voice: Voice?
+        get() = currentVoice
+        set(value) {
+            currentVoice = value
+            value?.let { tts.voice = it }
         }
 
     inner class TTSBinder : Binder() {
@@ -64,17 +77,25 @@ class TTSService : Service(), TextToSpeech.OnInitListener {
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            Log.d("TTS_SERVICE", "TTS initialized successfully")
-            val result = tts.setLanguage(currentLanguage)
-            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                Log.w("TTS_SERVICE", "Language not supported, falling back to US English")
-                tts.language = Locale.US
-            }
+            // After language initialization, try to set the best available voice
+            initializeBestVoice()
             isInitialized = true
             startForeground()
         } else {
             Log.e("TTS_SERVICE", "TTS initialization failed with status: $status")
             stopSelf()
+        }
+    }
+
+    private fun initializeBestVoice() {
+        // Try to find and set the best available voice
+        voices?.firstOrNull { voice ->
+            voice.name.contains("neural", ignoreCase = true) ||
+            voice.name.contains("premium", ignoreCase = true) ||
+            voice.name.contains("enhanced", ignoreCase = true)
+        }?.let { bestVoice ->
+            voice = bestVoice
+            Log.d("TTS_SERVICE", "Set best voice: ${bestVoice.name}")
         }
     }
 
@@ -153,5 +174,9 @@ class TTSService : Service(), TextToSpeech.OnInitListener {
 
     fun setSpeechRate(rate: Float) {
         tts.setSpeechRate(rate)
+    }
+
+    fun setPitch(pitch: Float) {
+        tts.setPitch(pitch)
     }
 }
