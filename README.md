@@ -1,6 +1,6 @@
 # Friendly PDF Reader
 
-An accessible PDF reader focused on readability and text-to-speech capabilities. This application is designed to make PDF reading more user-friendly and now includes a bookshelf feature for better document management.
+An accessible PDF reader focused on readability and text-to-speech capabilities. This application is designed to make PDF reading more user-friendly and includes a bookshelf feature for better document management.
 
 ## Features
 
@@ -8,6 +8,10 @@ An accessible PDF reader focused on readability and text-to-speech capabilities.
 
 - **PDF Viewing**: Smooth PDF document rendering with page navigation
 - **Text-to-Speech**: Built-in reader that converts text to speech
+- **Sleep Timer**: 
+  - Preset options for quick setup
+  - Custom timer with HH:MM:SS format
+  - Persistent notification showing remaining time
 - **Multi-language Support**:
   - English
   - German (Deutsch)
@@ -17,12 +21,13 @@ An accessible PDF reader focused on readability and text-to-speech capabilities.
 
 ### Reading Assistance
 
-- **Text Highlighting**: Highlights text as it's being read
 - **Progress Tracking**: Shows reading progress and estimated time remaining
 - **Media Controls**:
   - Play/Pause
+  - Next/Previous sentence navigation
   - Speed adjustment
   - Progress bar navigation
+  - Sleep timer control
 
 ### User Interface
 
@@ -32,8 +37,9 @@ An accessible PDF reader focused on readability and text-to-speech capabilities.
   - Persistent theme settings
 - **Floating Action Menu**: Quick access to core functions, including bookshelf
 - **Last Read Position**: Remembers the last opened PDF and position
+- **System Media Controls**: Integration with system notification media controls
 
-### New Bookshelf Feature
+### Bookshelf Feature
 
 - **Document Management**: Organize and access your PDFs from a central bookshelf
 - **Thumbnails**: Visual representation of PDF documents
@@ -42,10 +48,10 @@ An accessible PDF reader focused on readability and text-to-speech capabilities.
 
 ## Current Improvements
 
-- Bookshelf functionality for better document organization
-- Thumbnail generation for visual document representation
-- Reading progress tracking per document
-- Integration of bookshelf access into the floating action menu
+- Enhanced sleep timer with custom time input
+- System media controls integration
+- Persistent timer notification
+- Improved media playback controls
 
 ## Future Improvements
 
@@ -63,6 +69,7 @@ An accessible PDF reader focused on readability and text-to-speech capabilities.
 - Implements Android's TextToSpeech
 - Requires Android API level 34
 - Utilizes Room database for bookshelf management
+- Integrates with Android MediaSession for system-wide media controls
 
 ## Feedback
 
