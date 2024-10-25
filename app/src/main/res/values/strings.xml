@@ -44,4 +44,9 @@
     <string name="sleep_timer_off">Timer Off</string>
     <string name="sleep_timer_set">Timer set for %1$d minutes</string>
     <string name="sleep_timer_cancel">Cancel Timer</string>
+    <string name="custom_timer">Custom Timer</string>
+    <string name="set">Set</string>
+    <string name="cancel">Cancel</string>
+    <string name="enter_time_format">Enter time (HH:MM:SS)</string>
+    <string name="invalid_time_format">Please enter valid time (00-99:00-59:00-59)</string>
 </resources>

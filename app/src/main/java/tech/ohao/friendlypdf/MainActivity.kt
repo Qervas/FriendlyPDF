@@ -49,6 +49,12 @@ import java.util.concurrent.TimeUnit
 import java.util.Timer
 import java.util.TimerTask
 import android.os.Build
+import android.widget.EditText
+import android.text.InputType
+import android.text.InputFilter
+import android.view.Gravity
+import android.widget.LinearLayout
+import android.widget.TextView
 
 // Make PageSize public by moving it outside the file-level scope
 data class PageSize(val width: Float, val height: Float)
@@ -60,12 +66,13 @@ class MainActivity : AppCompatActivity() {
     private var isSpeaking = false
     private var currentPage = 0
     private val PICK_PDF_FILE = 2
-    private var currentUri: Uri? = null 
-    
+    private var currentUri: Uri? = null
+
     // View mode states
     private enum class ViewMode {
         FIT_WIDTH, FIT_PAGE, CROP_MARGINS
     }
+
     private var currentViewMode = ViewMode.FIT_WIDTH
     private var isMediaControlsVisible = false
     private var speechRate = 1.0f
@@ -77,7 +84,7 @@ class MainActivity : AppCompatActivity() {
 
     private var currentReadingIndex = 0
 
-    private var lastSentenceStartTime: Long = 0 
+    private var lastSentenceStartTime: Long = 0
 
     private var isDarkMode = false
 
@@ -118,20 +125,20 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             requestPermissions(
                 arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
                 123
             )
         }
-        
+
         // Initialize database
         database = AppDatabase.getInstance(applicationContext)
-        
+
         // Initialize PDFBox
         PDFBoxResourceLoader.init(applicationContext)
-        
+
         // Check system dark mode setting
         val currentNightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         isDarkMode = currentNightMode == Configuration.UI_MODE_NIGHT_YES
@@ -140,7 +147,7 @@ class MainActivity : AppCompatActivity() {
         pdfView = binding.pdfView
         pdfView.setNightMode(isDarkMode)
         pdfView.setBackgroundColor(if (isDarkMode) Color.BLACK else Color.WHITE)
-        
+
         // Setup other UI components
         setupMediaControls()
         setupFabMenu()
@@ -196,7 +203,7 @@ class MainActivity : AppCompatActivity() {
     private fun loadLastOpenedPDF() {
         val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         val lastPdfUri = prefs.getString(LAST_PDF_URI, null)
-        
+
         if (lastPdfUri != null) {
             try {
                 val uri = Uri.parse(lastPdfUri)
@@ -222,13 +229,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadPDF(uri: Uri) {
         currentUri = uri
-        
+
         // Save this URI as the last opened PDF
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             .edit()
             .putString(LAST_PDF_URI, uri.toString())
             .apply()
-        
+
         lifecycleScope.launch {
             try {
                 withContext(Dispatchers.Main) {
@@ -247,7 +254,7 @@ class MainActivity : AppCompatActivity() {
                     pdfView.post {
                         pdfView.setNightMode(false)
                         pdfView.setBackgroundColor(Color.WHITE)
-                        
+
                         // Toggle back to dark after a short delay
                         pdfView.postDelayed({
                             pdfView.setNightMode(true)
@@ -309,7 +316,10 @@ class MainActivity : AppCompatActivity() {
                 } catch (e: SecurityException) {
                     // Permission might already be taken or not available
                 }
-                loadPdfWithCurrentSettings(uri, 0)  // Start from the first page for newly opened PDFs
+                loadPdfWithCurrentSettings(
+                    uri,
+                    0
+                )  // Start from the first page for newly opened PDFs
             }
         }
     }
@@ -320,7 +330,7 @@ class MainActivity : AppCompatActivity() {
             ViewMode.FIT_PAGE -> ViewMode.CROP_MARGINS
             ViewMode.CROP_MARGINS -> ViewMode.FIT_WIDTH
         }
-        
+
         // Reload PDF with new view mode
         pdfView.let {
             val currentPage = it.currentPage
@@ -328,18 +338,18 @@ class MainActivity : AppCompatActivity() {
                 loadPdfWithCurrentSettings(uri, currentPage)
             }
         }
-        
+
         // Show current mode to user
         Toast.makeText(this, "Mode: ${currentViewMode.name}", Toast.LENGTH_SHORT).show()
     }
 
     private fun loadPdfWithCurrentSettings(uri: Uri, pageNumber: Int = 0, book: Book? = null) {
         currentUri = uri
-        
+
         lifecycleScope.launch {
             val openedBook = book ?: handleBookOpening(uri)
             val startPage = book?.lastPageRead ?: pageNumber
-            
+
             Log.d("PDF_READER", "Loading PDF with page number: $startPage")
             pdfView.fromUri(uri)
                 .defaultPage(startPage)
@@ -349,7 +359,10 @@ class MainActivity : AppCompatActivity() {
                     Log.d("PDF_READER", "Page changed to: ${page + 1}")
                     // Update the current page number
                     lifecycleScope.launch(Dispatchers.IO) {
-                        val updatedBook = openedBook.copy(lastPageRead = page, lastReadTimestamp = System.currentTimeMillis())
+                        val updatedBook = openedBook.copy(
+                            lastPageRead = page,
+                            lastReadTimestamp = System.currentTimeMillis()
+                        )
                         database.bookDao().updateBook(updatedBook)
                     }
                 }
@@ -363,7 +376,7 @@ class MainActivity : AppCompatActivity() {
                 .scrollHandle(DefaultScrollHandle(this@MainActivity))  // Use this@MainActivity instead of this
                 .spacing(10)
                 .nightMode(isDarkMode)
-                .onLoad { 
+                .onLoad {
                     Log.d("PDF_READER", "PDF loaded, current page: ${pdfView.currentPage}")
                 }
                 .load()
@@ -375,16 +388,17 @@ class MainActivity : AppCompatActivity() {
         ttsService?.let { service ->
             val result = service.setLanguage(locale)
             if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                Toast.makeText(this, getString(R.string.language_not_supported), Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.language_not_supported), Toast.LENGTH_SHORT)
+                    .show()
                 return
             }
         }
-        
+
         // Update app locale without recreation
         val config = resources.configuration
         config.setLocale(locale)
         resources.updateConfiguration(config, resources.displayMetrics)
-        
+
         // Update UI text
         updateUIText()
     }
@@ -393,8 +407,8 @@ class MainActivity : AppCompatActivity() {
         // Update all text in the UI that uses string resources
         binding.mediaControls.apply {
             btnPrevious.contentDescription = getString(R.string.previous_page)
-            btnPlayPause.contentDescription = 
-                if (isSpeaking) getString(R.string.pause) 
+            btnPlayPause.contentDescription =
+                if (isSpeaking) getString(R.string.pause)
                 else getString(R.string.play)
             btnNext.contentDescription = getString(R.string.next_page)
             btnClose.contentDescription = getString(R.string.hide_controls)
@@ -442,14 +456,18 @@ class MainActivity : AppCompatActivity() {
 
         val progressWithinSentence = if (sentenceStartTime > 0) {
             val timeElapsed = currentTime - sentenceStartTime
-            val progressPercent = (timeElapsed.toFloat() / estimatedSentenceDuration).coerceIn(0f, 1f)
+            val progressPercent =
+                (timeElapsed.toFloat() / estimatedSentenceDuration).coerceIn(0f, 1f)
             (progressPercent * (100f / sentences.size))
         } else {
             0f
         }
 
         val totalProgress = baseProgress + progressWithinSentence
-        Log.d("Progress", "Base: $baseProgress, Within Sentence: $progressWithinSentence, Total: $totalProgress")
+        Log.d(
+            "Progress",
+            "Base: $baseProgress, Within Sentence: $progressWithinSentence, Total: $totalProgress"
+        )
 
         return totalProgress.toInt().coerceIn(0, 100)
     }
@@ -462,46 +480,49 @@ class MainActivity : AppCompatActivity() {
 
     private fun startReading() {
         if (currentUri == null) return
-        
+
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@MainActivity, R.string.processing_pdf, Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MainActivity, R.string.processing_pdf, Toast.LENGTH_SHORT)
+                        .show()
                 }
-                
+
                 Log.d("PDF_READER", "Starting to read page ${pdfView.currentPage}")
                 readPage(pdfView.currentPage)
-                
+
                 withContext(Dispatchers.Main) {
                     if (sentences.isNotEmpty()) {
                         Log.d("PDF_READER", "Sentences extracted: ${sentences.size}")
                         isSpeaking = true
                         currentReadingIndex = 0
                         lastSentenceStartTime = System.currentTimeMillis()
-                        
+
                         binding.mediaControls.btnPlayPause.setImageResource(R.drawable.baseline_pause_24)
                         binding.mediaControls.audioProgress.max = 100
                         binding.mediaControls.audioProgress.progress = 0
-                        
+
                         startTimeUpdateTimer()
-                        
+
                         Log.d("PDF_READER", "Setting speech rate: $speechRate")
                         ttsService?.setSpeechRate(speechRate)
                         currentSentence = sentences[0]
                         updateTimeRemaining()
                         highlightCurrentSentence(currentSentence)
-                        
+
                         // Enhanced speech parameters
                         val params = Bundle().apply {
                             putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "0")
                             // Use the correct constant keys for TTS parameters
                             putFloat("volume", volume)  // Custom parameter for volume
                             putFloat("pitch", pitch)    // Custom parameter for pitch
-                            
+
                             // Add breathing room between sentences
                             putString(TextToSpeech.Engine.KEY_FEATURE_NETWORK_SYNTHESIS, "true")
-                            putString(TextToSpeech.Engine.KEY_PARAM_STREAM, 
-                                android.media.AudioManager.STREAM_MUSIC.toString())
+                            putString(
+                                TextToSpeech.Engine.KEY_PARAM_STREAM,
+                                android.media.AudioManager.STREAM_MUSIC.toString()
+                            )
                         }
 
                         // Format text with SSML if supported
@@ -512,8 +533,9 @@ class MainActivity : AppCompatActivity() {
                         }
 
                         ttsService?.speak(textToSpeak, TextToSpeech.QUEUE_FLUSH, params, "0")
-                        
-                        ttsService?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+
+                        ttsService?.setOnUtteranceProgressListener(object :
+                            UtteranceProgressListener() {
                             override fun onStart(utteranceId: String) {
                                 Log.d("PDF_READER", "Started utterance: $utteranceId")
                                 utteranceId.toIntOrNull()?.let { index ->
@@ -530,7 +552,7 @@ class MainActivity : AppCompatActivity() {
                             override fun onDone(utteranceId: String) {
                                 Log.d("PDF_READER", "Finished utterance: $utteranceId")
                                 if (!isSpeaking) return  // Don't continue if stopped manually
-                                
+
                                 utteranceId.toIntOrNull()?.let { index ->
                                     if (index < sentences.size - 1) {
                                         // Continue with next sentence on current page
@@ -538,9 +560,9 @@ class MainActivity : AppCompatActivity() {
                                             currentSentence = sentences[index + 1]
                                             highlightCurrentSentence(currentSentence)
                                             ttsService?.speak(
-                                                currentSentence, 
-                                                TextToSpeech.QUEUE_FLUSH, 
-                                                null, 
+                                                currentSentence,
+                                                TextToSpeech.QUEUE_FLUSH,
+                                                null,
                                                 (index + 1).toString()
                                             )
                                         }
@@ -636,15 +658,17 @@ class MainActivity : AppCompatActivity() {
                         binding.mediaControls.audioProgress.progress = 0
                         updateTimeRemaining()
                         highlightCurrentSentence(currentSentence)
-                        
+
                         // Use the same speech parameters as in startReading
                         val params = Bundle().apply {
                             putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "0")
                             putFloat("volume", volume)
                             putFloat("pitch", pitch)
                             putString(TextToSpeech.Engine.KEY_FEATURE_NETWORK_SYNTHESIS, "true")
-                            putString(TextToSpeech.Engine.KEY_PARAM_STREAM, 
-                                android.media.AudioManager.STREAM_MUSIC.toString())
+                            putString(
+                                TextToSpeech.Engine.KEY_PARAM_STREAM,
+                                android.media.AudioManager.STREAM_MUSIC.toString()
+                            )
                         }
 
                         val textToSpeak = if (ssmlEnabled) {
@@ -673,7 +697,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             } catch (e: Exception) {
-                withContext(Dispatchers.Main) { 
+                withContext(Dispatchers.Main) {
                     stopReading()
                     Toast.makeText(
                         this@MainActivity,
@@ -693,7 +717,7 @@ class MainActivity : AppCompatActivity() {
         }
         val pageText = stripper.getText(document)
         document.close()
-        
+
         // Split text into sentences, handling multiple types of sentence endings
         sentences = pageText.split("""[.!?]\s+""".toRegex())
             .filter { it.isNotBlank() }
@@ -703,7 +727,7 @@ class MainActivity : AppCompatActivity() {
     private fun stopReading() {
         timeUpdateTimer?.cancel()
         timeUpdateTimer = null
-        
+
         ttsService?.stop()
         isSpeaking = false
         currentSentence = ""
@@ -728,7 +752,10 @@ class MainActivity : AppCompatActivity() {
                 val stripper = object : PDFTextStripper() {
                     var foundPosition: RectF? = null
 
-                    override fun writeString(text: String, textPositions: MutableList<TextPosition>) {
+                    override fun writeString(
+                        text: String,
+                        textPositions: MutableList<TextPosition>
+                    ) {
                         if (foundPosition != null) return
 
                         val normalizedText = text.replace("\n", " ").trim()
@@ -756,7 +783,8 @@ class MainActivity : AppCompatActivity() {
                                 }
                             }
 
-                            val sentencePositions = textPositions.subList(startPositionIndex, endPositionIndex + 1)
+                            val sentencePositions =
+                                textPositions.subList(startPositionIndex, endPositionIndex + 1)
                             val x = sentencePositions.minOf { it.x }
                             val y = sentencePositions.minOf { it.y }
                             val maxX = sentencePositions.maxOf { it.x + it.width }
@@ -831,7 +859,7 @@ class MainActivity : AppCompatActivity() {
         val height: Float = textPosition.height
         val text: String = textPosition.unicode
         val boundingBox: RectF = RectF(x, y, x + width, y + height)
-        
+
         lateinit var pageSize: PageSize
     }
 
@@ -858,10 +886,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupMediaControls() {
         binding.mediaControls.apply {
-            btnPlayPause.setOnClickListener { 
+            btnPlayPause.setOnClickListener {
                 toggleReading()
             }
-            
+
             btnPrevious.setOnClickListener {
                 if (pdfView.currentPage > 0) {
                     pdfView.jumpTo(pdfView.currentPage - 1)
@@ -871,7 +899,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
-            
+
             btnNext.setOnClickListener {
                 if (pdfView.currentPage < pdfView.pageCount - 1) {
                     pdfView.jumpTo(pdfView.currentPage + 1)
@@ -881,18 +909,19 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
-            
+
             btnClose.setOnClickListener {
                 toggleMediaControlsVisibility(false)
             }
 
             // Speed button click handler
             btnSpeed.setOnClickListener {
-                speedControlContainer.visibility = if (speedControlContainer.visibility == View.VISIBLE) {
-                    View.GONE
-                } else {
-                    View.VISIBLE
-                }
+                speedControlContainer.visibility =
+                    if (speedControlContainer.visibility == View.VISIBLE) {
+                        View.GONE
+                    } else {
+                        View.VISIBLE
+                    }
             }
 
             // Speed control setup
@@ -921,7 +950,8 @@ class MainActivity : AppCompatActivity() {
             audioProgress.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
                     if (fromUser && sentences.isNotEmpty()) {
-                        val newIndex = (progress * sentences.size / 100f).toInt().coerceIn(0, sentences.size - 1)
+                        val newIndex = (progress * sentences.size / 100f).toInt()
+                            .coerceIn(0, sentences.size - 1)
                         if (newIndex != currentReadingIndex) {
                             currentReadingIndex = newIndex
                             currentSentence = sentences[newIndex]
@@ -940,7 +970,12 @@ class MainActivity : AppCompatActivity() {
 
                 override fun onStopTrackingTouch(seekBar: SeekBar) {
                     if (isSpeaking) {
-                        ttsService?.speak(currentSentence, TextToSpeech.QUEUE_FLUSH, null, currentReadingIndex.toString())
+                        ttsService?.speak(
+                            currentSentence,
+                            TextToSpeech.QUEUE_FLUSH,
+                            null,
+                            currentReadingIndex.toString()
+                        )
                     }
                 }
             })
@@ -980,9 +1015,9 @@ class MainActivity : AppCompatActivity() {
             R.color.highlight_high_contrast to "High Contrast",
             R.color.highlight_light_contrast to "Light"
         )
-        
+
         val colorNames = colors.map { it.second }.toTypedArray()
-        
+
         AlertDialog.Builder(this)
             .setTitle("Select Highlight Color")
             .setItems(colorNames) { _, which ->
@@ -996,7 +1031,7 @@ class MainActivity : AppCompatActivity() {
         binding.fabMain.setOnClickListener {
             toggleFabMenu()
         }
-        
+
         // Add PDF FAB
         binding.fabAdd.setOnClickListener {
             toggleFabMenu()
@@ -1006,26 +1041,26 @@ class MainActivity : AppCompatActivity() {
             }
             startActivityForResult(intent, PICK_PDF_FILE)
         }
-        
+
         // Read FAB
         binding.fabRead.setOnClickListener {
             toggleFabMenu()
             toggleMediaControlsVisibility(true)
         }
-        
+
         // Read FAB long press for color options
         binding.fabRead.setOnLongClickListener {
             toggleFabMenu()
             showColorPickerDialog()
             true
         }
-        
+
         // Language FAB
         binding.fabLanguage.setOnClickListener {
             toggleFabMenu()
             showLanguageDialog()
         }
-        
+
         // Click outside to close menu
         binding.pdfView.setOnClickListener {
             if (isFabMenuExpanded) {
@@ -1041,7 +1076,7 @@ class MainActivity : AppCompatActivity() {
             binding.fabRead,
             binding.fabAdd
         )
-        
+
         // Animate FABs
         fabs.forEachIndexed { index, fab ->
             if (isFabMenuExpanded) {
@@ -1068,16 +1103,22 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-    
+
     private fun toggleFabMenu() {
         isFabMenuExpanded = !isFabMenuExpanded
-        
+
         val rotation = if (isFabMenuExpanded) 45f else 0f
         binding.fabMain.animate().rotation(rotation).setDuration(200)
-        
+
         // Reverse the order of FABs
-        val fabs = listOf(binding.fabBookshelf, binding.fabTheme, binding.fabLanguage, binding.fabRead, binding.fabAdd)
-        
+        val fabs = listOf(
+            binding.fabBookshelf,
+            binding.fabTheme,
+            binding.fabLanguage,
+            binding.fabRead,
+            binding.fabAdd
+        )
+
         fabs.forEachIndexed { index, fab ->
             if (isFabMenuExpanded) {
                 fab.alpha = 1f
@@ -1103,13 +1144,13 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-    
+
     private fun showLanguageDialog() {
         val languages = arrayOf(
-            "English", 
-            "Deutsch", 
-            "Français", 
-            "简体中文", 
+            "English",
+            "Deutsch",
+            "Français",
+            "简体中文",
             "Svenska"
         )
         AlertDialog.Builder(this)
@@ -1131,7 +1172,7 @@ class MainActivity : AppCompatActivity() {
     private fun toggleMediaControlsVisibility(show: Boolean) {
         isMediaControlsVisible = show
         binding.mediaControls.root.visibility = if (show) View.VISIBLE else View.GONE
-        
+
         // Update read FAB icon if needed
         binding.fabRead.setImageResource(
             if (show) R.drawable.baseline_close_24
@@ -1183,13 +1224,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun toggleTheme() {
         isDarkMode = !isDarkMode
-        
+
         // Save theme preference
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             .edit()
             .putBoolean(THEME_PREF, isDarkMode)
             .apply()
-            
+
         // Force theme change by toggling twice if in dark mode
         if (isDarkMode) {
             pdfView.setNightMode(false)
@@ -1198,7 +1239,7 @@ class MainActivity : AppCompatActivity() {
                 val currentPage = pdfView.currentPage
                 loadPdfWithCurrentSettings(uri, currentPage)
             }
-            
+
             // Toggle back to dark after a short delay
             pdfView.postDelayed({
                 pdfView.setNightMode(true)
@@ -1220,7 +1261,7 @@ class MainActivity : AppCompatActivity() {
         // Update PDF view night mode
         pdfView.setNightMode(isDarkMode)
         pdfView.setBackgroundColor(if (isDarkMode) Color.BLACK else Color.WHITE)
-        
+
         // Force redraw the current page to apply night mode
         val currentPage = pdfView.currentPage
         pdfView.jumpTo(currentPage)
@@ -1230,7 +1271,7 @@ class MainActivity : AppCompatActivity() {
     private fun checkSystemTheme() {
         val currentNightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         isDarkMode = currentNightMode == Configuration.UI_MODE_NIGHT_YES
-        
+
         // Force a theme toggle if in dark mode to ensure proper PDF rendering
         if (isDarkMode) {
             isDarkMode = false  // Temporarily set to light mode
@@ -1322,20 +1363,20 @@ class MainActivity : AppCompatActivity() {
                             // Define maximum dimensions
                             val maxWidth = 300
                             val maxHeight = 400
-                            
+
                             // Calculate scale to fit within max dimensions
                             val scale = minOf(
                                 maxWidth.toFloat() / page.width,
                                 maxHeight.toFloat() / page.height
                             )
-                            
+
                             // Create bitmap with scaled dimensions
                             val bitmap = Bitmap.createBitmap(
                                 (page.width * scale).toInt(),
                                 (page.height * scale).toInt(),
                                 Bitmap.Config.ARGB_8888
                             )
-                            
+
                             // Render the page onto the bitmap
                             page.render(
                                 bitmap,
@@ -1350,11 +1391,11 @@ class MainActivity : AppCompatActivity() {
                                 "thumbnails/${uri.lastPathSegment}_thumb.jpg"
                             )
                             thumbnailFile.parentFile?.mkdirs()
-                            
+
                             FileOutputStream(thumbnailFile).use { out ->
                                 bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
                             }
-                            
+
                             thumbnailFile.absolutePath
                         }
                     } else null
@@ -1374,26 +1415,26 @@ class MainActivity : AppCompatActivity() {
                         // Improved language filtering
                         voice.name.let { name ->
                             name.contains("-en-", ignoreCase = true) ||
-                            name.contains("en-US", ignoreCase = true) ||
-                            name.contains("en-GB", ignoreCase = true) ||
-                            name.contains("en-AU", ignoreCase = true) ||
-                            name.contains("en-IN", ignoreCase = true) ||
-                            name.contains("en-CA", ignoreCase = true) ||
-                            name.contains("-fr-", ignoreCase = true) ||
-                            name.contains("fr-FR", ignoreCase = true) ||
-                            name.contains("-de-", ignoreCase = true) ||
-                            name.contains("de-DE", ignoreCase = true) ||
-                            name.contains("-sv-", ignoreCase = true) ||
-                            name.contains("sv-SE", ignoreCase = true) ||
-                            name.contains("-zh-", ignoreCase = true) ||
-                            name.contains("zh-CN", ignoreCase = true)
+                                    name.contains("en-US", ignoreCase = true) ||
+                                    name.contains("en-GB", ignoreCase = true) ||
+                                    name.contains("en-AU", ignoreCase = true) ||
+                                    name.contains("en-IN", ignoreCase = true) ||
+                                    name.contains("en-CA", ignoreCase = true) ||
+                                    name.contains("-fr-", ignoreCase = true) ||
+                                    name.contains("fr-FR", ignoreCase = true) ||
+                                    name.contains("-de-", ignoreCase = true) ||
+                                    name.contains("de-DE", ignoreCase = true) ||
+                                    name.contains("-sv-", ignoreCase = true) ||
+                                    name.contains("sv-SE", ignoreCase = true) ||
+                                    name.contains("-zh-", ignoreCase = true) ||
+                                    name.contains("zh-CN", ignoreCase = true)
                         }
                     }
                     .sortedWith(compareBy { voice: Voice ->
                         if (voice.name.contains("network", ignoreCase = true)) 0 else 1
                     })
             } ?: return
-            
+
             val voiceItems = voices.mapIndexed { index, voice: Voice ->
                 val languageCode = voice.name.substringAfter("-").substringBefore("-")
                 val (languageName, languageFlag) = when {
@@ -1428,20 +1469,20 @@ class MainActivity : AppCompatActivity() {
                     append(languageFlag)
                 }
             }.toTypedArray()
-            
+
             // Log the available voices for debugging
             voices.forEach { voice ->
                 Log.d("VoiceSelection", "Available voice: ${voice.name}")
             }
-            
-            val currentIndex = voices.indexOf(currentVoice) 
-            
+
+            val currentIndex = voices.indexOf(currentVoice)
+
             AlertDialog.Builder(this)
                 .setTitle(getString(R.string.select_voice))
                 .setSingleChoiceItems(
                     voiceItems,
                     currentIndex,
-                    { dialog, which -> 
+                    { dialog, which ->
                         val selectedVoice = voices[which]
                         service.voice = selectedVoice
                         currentVoice = selectedVoice
@@ -1489,14 +1530,14 @@ class MainActivity : AppCompatActivity() {
         ttsService?.let { service ->
             // Get available voices
             val voices: Set<Voice>? = service.voices
-            
+
             // Find the best available voice (prefer neural/high-quality voices)
             val bestVoice = voices?.firstOrNull { voice: Voice ->
                 voice.name.contains("neural", ignoreCase = true) ||
-                voice.name.contains("premium", ignoreCase = true) ||
-                voice.name.contains("enhanced", ignoreCase = true)
+                        voice.name.contains("premium", ignoreCase = true) ||
+                        voice.name.contains("enhanced", ignoreCase = true)
             } ?: voices?.firstOrNull()
-            
+
             // Set the best available voice
             bestVoice?.let { voice: Voice ->
                 service.voice = voice
@@ -1520,7 +1561,7 @@ class MainActivity : AppCompatActivity() {
         ttsService?.let { service ->
             val savedVoiceName = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
                 .getString("preferred_voice", null)
-                
+
             if (savedVoiceName != null) {
                 service.voices?.find { it.name == savedVoiceName }?.let { voice: Voice ->
                     service.voice = voice
@@ -1545,15 +1586,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showSleepTimerDialog() {
-        val times = arrayOf("Off", "15 min", "30 min", "45 min", "60 min")
+        val times = arrayOf("Off", "15 min", "30 min", "45 min", "60 min", "Custom...")
         val currentSelection = when (sleepTimeInMinutes) {
             15 -> 1
             30 -> 2
             45 -> 3
             60 -> 4
-            else -> 0
+            0 -> 0
+            else -> 5  // Custom time is selected
         }
-        
+
         AlertDialog.Builder(this)
             .setTitle(getString(R.string.sleep_timer))
             .setSingleChoiceItems(times, currentSelection) { dialog, which ->
@@ -1563,42 +1605,44 @@ class MainActivity : AppCompatActivity() {
                     2 -> setSleepTimer(30)
                     3 -> setSleepTimer(45)
                     4 -> setSleepTimer(60)
+                    5 -> showCustomTimerDialog()
                 }
                 dialog.dismiss()
             }
             .show()
     }
 
-    private fun setSleepTimer(minutes: Int) {
+    private fun setSleepTimer(minutes: Int, seconds: Int = 0) {
         sleepTimeInMinutes = minutes
         sleepTimer?.cancel()
-        ttsService?.updateCountdown(minutes)
         
+        // Update the notification countdown
+        ttsService?.updateCountdown(minutes, seconds)
+
+        val totalMillis = TimeUnit.MINUTES.toMillis(minutes.toLong()) + 
+                         TimeUnit.SECONDS.toMillis(seconds.toLong())
+
         sleepTimer = Timer("SleepTimer").apply {
             schedule(object : TimerTask() {
                 override fun run() {
-                    if (sleepTimeInMinutes <= 0) {
-                        runOnUiThread {
-                            if (isSpeaking) {
-                                stopReading()
-                            }
-                            sleepTimer?.cancel()
-                            sleepTimer = null
-                            ttsService?.updateCountdown(0)
-                            Toast.makeText(
-                                this@MainActivity,
-                                getString(R.string.sleep_timer_off),
-                                Toast.LENGTH_SHORT
-                            ).show()
+                    runOnUiThread {
+                        if (isSpeaking) {
+                            stopReading()
                         }
-                    } else {
-                        sleepTimeInMinutes--
+                        sleepTimer?.cancel()
+                        sleepTimer = null
+                        ttsService?.updateCountdown(0)
+                        Toast.makeText(
+                            this@MainActivity,
+                            getString(R.string.sleep_timer_off),
+                            Toast.LENGTH_SHORT
+                        ).show()
                     }
                 }
-            }, 0, TimeUnit.MINUTES.toMillis(1))
+            }, totalMillis)
         }
-        
-        // Only show toast for timer confirmation
+
+        // Show toast for timer confirmation
         Toast.makeText(
             this,
             getString(R.string.sleep_timer_set, minutes),
@@ -1616,6 +1660,89 @@ class MainActivity : AppCompatActivity() {
             getString(R.string.sleep_timer_off),
             Toast.LENGTH_SHORT
         ).show()
+    }
+    
+    private fun showCustomTimerDialog() {
+        // Create three EditTexts for hours, minutes, and seconds
+        val hourInput = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER
+            filters = arrayOf(InputFilter.LengthFilter(2))
+            hint = "00"
+            gravity = Gravity.CENTER
+            if (sleepTimeInMinutes >= 60) {
+                setText((sleepTimeInMinutes / 60).toString().padStart(2, '0'))
+            }
+        }
+
+        val minuteInput = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER
+            filters = arrayOf(InputFilter.LengthFilter(2))
+            hint = "00"
+            gravity = Gravity.CENTER
+            if (sleepTimeInMinutes > 0) {
+                setText((sleepTimeInMinutes % 60).toString().padStart(2, '0'))
+            }
+        }
+
+        val secondInput = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER
+            filters = arrayOf(InputFilter.LengthFilter(2))
+            hint = "00"
+            gravity = Gravity.CENTER
+        }
+
+        // Create horizontal layout for the time inputs
+        val inputLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            
+            // Add the inputs with separators
+            addView(hourInput, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(    TextView(context).apply {
+                text = ":"
+                gravity = Gravity.CENTER
+                textSize = 20f
+            })
+            addView(minuteInput, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(TextView(context).apply { 
+                text = ":" 
+                gravity = Gravity.CENTER
+                textSize = 20f
+            })
+            addView(secondInput, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        }
+
+        // Create container with padding
+        val container = FrameLayout(this).apply {
+            val padding = resources.getDimensionPixelSize(R.dimen.dialog_padding)
+            setPadding(padding, padding, padding, padding)
+            addView(inputLayout)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.custom_timer))
+            .setMessage(getString(R.string.enter_time_format))
+            .setView(container)
+            .setPositiveButton(getString(R.string.set)) { _, _ ->
+                val hours = hourInput.text.toString().toIntOrNull() ?: 0
+                val minutes = minuteInput.text.toString().toIntOrNull() ?: 0
+                val seconds = secondInput.text.toString().toIntOrNull() ?: 0
+
+                if (hours in 0..99 && minutes in 0..59 && seconds in 0..59) {
+                    val totalMinutes = hours * 60 + minutes
+                    if (totalMinutes > 0 || seconds > 0) {
+                        setSleepTimer(totalMinutes, seconds)
+                    }
+                } else {
+                    Toast.makeText(
+                        this,
+                        getString(R.string.invalid_time_format),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+            .setNegativeButton(getString(R.string.cancel), null)
+            .show()
     }
 }
     

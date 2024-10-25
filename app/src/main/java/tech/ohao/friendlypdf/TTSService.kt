@@ -40,6 +40,7 @@ class TTSService : Service(), TextToSpeech.OnInitListener {
     private var currentSentenceIndex = 0
     private var onSentenceChangeListener: ((Int) -> Unit)? = null
     private var pausedSentence: String? = null  
+    private var remainingSeconds: Int = 0  
 
     // Language-related function
     fun setLanguage(locale: Locale): Int {
@@ -267,33 +268,54 @@ class TTSService : Service(), TextToSpeech.OnInitListener {
     }
 
     private fun updateNotification() {
-        // Always show timer if it's greater than 0
-        val timerText = if (remainingTimeInMinutes > 0) {
-            "⏰ ${remainingTimeInMinutes} min remaining"
-        } else {
-            ""
-        }
+        // Create the media notification
+        val mediaNotification = createMediaNotification()
+        
+        // Create timer notification if timer is active
+        if (remainingSeconds > 0) {
+            val minutes = remainingSeconds / 60
+            val seconds = remainingSeconds % 60
+            val timerText = "⏰ %02d:%02d".format(minutes, seconds)
+            
+            val timerNotification = NotificationCompat.Builder(this, "timer_channel")
+                .setContentTitle(timerText)
+                .setSmallIcon(R.drawable.baseline_timer_24)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setOngoing(true)
+                .setSilent(true)
+                .build()
 
-        // Update media metadata with timer
+            try {
+                val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+                notificationManager.notify(NOTIFICATION_ID + 1, timerNotification)
+                notificationManager.notify(NOTIFICATION_ID, mediaNotification)
+            } catch (e: Exception) {
+                Log.e("TTS_SERVICE", "Error updating notifications", e)
+            }
+        } else {
+            // Remove timer notification when timer is not active
+            val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.cancel(NOTIFICATION_ID + 1)
+            notificationManager.notify(NOTIFICATION_ID, mediaNotification)
+        }
+    }
+
+    // Separate method for media notification
+    private fun createMediaNotification(): Notification {
         val metadata = MediaMetadataCompat.Builder()
             .putString(MediaMetadataCompat.METADATA_KEY_TITLE, "Reading PDF")
             .putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_TITLE, "Reading PDF")
-            .putString(
-                MediaMetadataCompat.METADATA_KEY_DISPLAY_SUBTITLE,
-                timerText.ifEmpty { currentSentence }
-            )
+            .putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_SUBTITLE, currentSentence)
             .build()
         mediaSession.setMetadata(metadata)
 
-        // Create pending intents for media controls
         val playPauseIntent = createActionIntent("play_pause")
         val prevIntent = createActionIntent("previous")
         val nextIntent = createActionIntent("next")
 
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+        return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Reading PDF")
             .setContentText(currentSentence)
-            .setSubText(timerText)  // Show timer as subtext
             .setStyle(
                 MediaStyle()
                     .setMediaSession(mediaSession.sessionToken)
@@ -313,10 +335,6 @@ class TTSService : Service(), TextToSpeech.OnInitListener {
             .setOngoing(true)
             .setSilent(true)
             .build()
-
-        // Update the notification without calling startForeground again
-        val notificationManager = getSystemService(NotificationManager::class.java)
-        notificationManager.notify(NOTIFICATION_ID, notification)
     }
 
     private fun createActionIntent(action: String): PendingIntent {
@@ -338,10 +356,23 @@ class TTSService : Service(), TextToSpeech.OnInitListener {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
+            // Create a separate channel for the timer
+            val timerChannel = NotificationChannel(
+                "timer_channel",  // New channel ID for timer
+                "Sleep Timer",    // Channel name
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                setShowBadge(false)
+                enableLights(false)
+                enableVibration(false)
+                setSound(null, null)
+            }
+
+            // Create main channel for media controls
+            val mediaChannel = NotificationChannel(
                 CHANNEL_ID,
                 "PDF Reader Service",
-                NotificationManager.IMPORTANCE_LOW  // Change to LOW to prevent sound/vibration
+                NotificationManager.IMPORTANCE_LOW
             ).apply {
                 setShowBadge(true)
                 enableLights(false)
@@ -349,8 +380,10 @@ class TTSService : Service(), TextToSpeech.OnInitListener {
                 setSound(null, null)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
+
             val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(channel)
+            manager.createNotificationChannel(timerChannel)
+            manager.createNotificationChannel(mediaChannel)
         }
     }
 
@@ -393,27 +426,40 @@ class TTSService : Service(), TextToSpeech.OnInitListener {
         tts.setPitch(pitch)
     }
 
-    fun updateCountdown(minutes: Int) {
-        remainingTimeInMinutes = minutes
+    fun updateCountdown(minutes: Int, seconds: Int = 0) {
+        remainingSeconds = minutes * 60 + seconds
         countdownTimer?.cancel()
 
-        if (minutes > 0) {
+        if (remainingSeconds > 0) {
+            // Create and show the timer notification immediately
+            updateNotification()  // Show notification right away
+
             countdownTimer = Timer("CountdownTimer").apply {
                 scheduleAtFixedRate(object : TimerTask() {
                     override fun run() {
-                        remainingTimeInMinutes = (remainingTimeInMinutes - 1).coerceAtLeast(0)
-                        if (remainingTimeInMinutes > 0) {
-                            updateNotification()  // Only update if timer is still running
-                        } else {
-                            // Timer finished, update one last time to clear the timer display
-                            updateNotification()
-                            countdownTimer?.cancel()
+                        remainingSeconds = (remainingSeconds - 1).coerceAtLeast(0)
+                        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+                        handler.post {
+                            if (remainingSeconds > 0) {
+                                updateNotification()
+                            } else {
+                                // When timer reaches zero
+                                countdownTimer?.cancel()
+                                updateNotification()  // This will remove the timer notification
+                                if (isSpeaking) {
+                                    stop()  // Stop reading when timer ends
+                                }
+                            }
                         }
                     }
-                }, 0, TimeUnit.MINUTES.toMillis(1))
+                }, 0, 1000) // Update every second
             }
+        } else {
+            // If timer is set to zero, remove the timer notification
+            val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.cancel(NOTIFICATION_ID + 1)
+            updateNotification()
         }
-        updateNotification()
     }
 
     fun setContent(newSentences: List<String>, startIndex: Int = 0) {
