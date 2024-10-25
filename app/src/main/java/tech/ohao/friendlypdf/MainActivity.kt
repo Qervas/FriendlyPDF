@@ -8,9 +8,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.github.barteksc.pdfviewer.PDFView
 import com.github.barteksc.pdfviewer.scroll.DefaultScrollHandle
-import com.google.android.material.floatingactionbutton.FloatingActionButton
 import tech.ohao.friendlypdf.databinding.ActivityMainBinding
-import com.github.barteksc.pdfviewer.util.FitPolicy 
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.view.View
@@ -23,44 +21,34 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import android.widget.SeekBar
-import tech.ohao.friendlypdf.databinding.LayoutMediaControlsBinding
 import android.graphics.RectF
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.core.content.ContextCompat
 import androidx.appcompat.app.AlertDialog
 import android.util.Log
-import java.util.Timer
-import java.util.TimerTask
-import com.tom_roush.pdfbox.text.TextPosition
-import kotlinx.coroutines.delay
 import android.graphics.Color
 import android.content.res.Configuration
 import android.content.ComponentName
 import android.content.Context
 import android.content.ServiceConnection
 import android.os.IBinder
-import tech.ohao.friendlypdf.BookshelfActivity
-import androidx.room.Room
-import androidx.room.RoomDatabase
-import androidx.room.Database
-import androidx.room.Entity
-import androidx.room.PrimaryKey
-import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.Query
 import android.content.ContentResolver
-import android.database.Cursor
 import android.provider.OpenableColumns
 import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.graphics.pdf.PdfRenderer
-import android.graphics.pdf.PdfDocument
 import java.io.File
 import java.io.FileOutputStream
 import androidx.interpolator.view.animation.FastOutSlowInInterpolator
 import android.view.animation.AnticipateInterpolator
 import android.speech.tts.Voice
+import com.tom_roush.pdfbox.text.TextPosition
+import kotlinx.coroutines.delay
+import java.util.concurrent.TimeUnit
+import java.util.Timer
+import java.util.TimerTask
+import android.os.Build
 
 // Make PageSize public by moving it outside the file-level scope
 data class PageSize(val width: Float, val height: Float)
@@ -72,7 +60,7 @@ class MainActivity : AppCompatActivity() {
     private var isSpeaking = false
     private var currentPage = 0
     private val PICK_PDF_FILE = 2
-    private var currentUri: Uri? = null  // Add this to track current PDF
+    private var currentUri: Uri? = null 
     
     // View mode states
     private enum class ViewMode {
@@ -83,21 +71,14 @@ class MainActivity : AppCompatActivity() {
     private var speechRate = 1.0f
     private var currentSentence = ""
     private var sentences = listOf<String>()
-    private lateinit var mediaControlsBinding: LayoutMediaControlsBinding
     private var highlightView: View? = null
     private var currentHighlightColor = R.color.highlight_blue
     private var isFabMenuExpanded = false
 
-    // Add timer related properties
-    private var timeUpdateTimer: Timer? = null
     private var currentReadingIndex = 0
 
-    private var readingStartTime: Long = 0 // Add this property to the class
-    private var totalEstimatedDuration: Long = 0 // Add this property to the class
+    private var lastSentenceStartTime: Long = 0 
 
-    private var lastSentenceStartTime: Long = 0 // Add this property to the class
-
-    // Add to the class properties
     private var isDarkMode = false
 
     private var isTTSServiceBound = false
@@ -107,6 +88,7 @@ class MainActivity : AppCompatActivity() {
             val binder = service as TTSService.TTSBinder
             ttsService = binder.getService()
             isTTSServiceBound = true
+            initializeTTSWithSavedVoice()
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
@@ -117,16 +99,13 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var database: AppDatabase
 
-    // Add to existing properties
-    private var fabVoice: FloatingActionButton? = null
-    
-    // Add these properties near the top of the class with other properties
     private var volume = 1.0f
     private var pitch = 1.0f
     private val ssmlEnabled = true
-
-    // Add near the top with other properties
     private var currentVoice: Voice? = null
+    private var sleepTimeInMinutes: Int = 0
+    private var timeUpdateTimer: Timer? = null
+    private var sleepTimer: Timer? = null
 
     companion object {
         const val PREFS_NAME = "FriendlyPDFPrefs"
@@ -139,6 +118,13 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            requestPermissions(
+                arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+                123
+            )
+        }
         
         // Initialize database
         database = AppDatabase.getInstance(applicationContext)
@@ -430,18 +416,18 @@ class MainActivity : AppCompatActivity() {
 
     private fun startTimeUpdateTimer() {
         timeUpdateTimer?.cancel()
-        timeUpdateTimer = Timer().apply {
+        timeUpdateTimer = Timer("TimeUpdateTimer").apply {
             scheduleAtFixedRate(object : TimerTask() {
                 override fun run() {
                     runOnUiThread {
+                        // Only update progress if we're actually speaking
                         if (isSpeaking && sentences.isNotEmpty()) {
-                            // Update progress bar only
                             val estimatedProgress = calculateProgressForCurrentSentence()
                             binding.mediaControls.audioProgress.progress = estimatedProgress
                         }
                     }
                 }
-            }, 0, 100) // Update every 100ms for smoother progress
+            }, 0, 100)  // Update every 100ms for smoother progress
         }
     }
 
@@ -962,6 +948,11 @@ class MainActivity : AppCompatActivity() {
             btnVoice.setOnClickListener {
                 showVoiceSelectionDialog()
             }
+
+            // Add this with your other button handlers
+            btnSleepTimer.setOnClickListener {
+                showSleepTimerDialog()
+            }
         }
     }
 
@@ -1149,6 +1140,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        timeUpdateTimer?.cancel()
+        sleepTimer?.cancel()
         ttsService?.stop()
         if (isTTSServiceBound) {
             unbindService(serviceConnection)
@@ -1375,9 +1368,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun showVoiceSelectionDialog() {
         ttsService?.let { service ->
-            val voices: List<Voice> = service.voices?.toList()?.let { voiceList ->
+            val voices: List<Voice> = service.voices?.toList()?.let { voiceList: List<Voice> ->
                 voiceList
-                    .filter { voice -> 
+                    .filter { voice: Voice ->
                         // Improved language filtering
                         voice.name.let { name ->
                             name.contains("-en-", ignoreCase = true) ||
@@ -1396,7 +1389,7 @@ class MainActivity : AppCompatActivity() {
                             name.contains("zh-CN", ignoreCase = true)
                         }
                     }
-                    .sortedWith(compareBy { voice ->
+                    .sortedWith(compareBy { voice: Voice ->
                         if (voice.name.contains("network", ignoreCase = true)) 0 else 1
                     })
             } ?: return
@@ -1550,4 +1543,79 @@ class MainActivity : AppCompatActivity() {
     private fun updateVolume(newVolume: Float) {
         volume = newVolume.coerceIn(0.0f, 1.0f)  // Keep volume between 0 and 1
     }
+
+    private fun showSleepTimerDialog() {
+        val times = arrayOf("Off", "15 min", "30 min", "45 min", "60 min")
+        val currentSelection = when (sleepTimeInMinutes) {
+            15 -> 1
+            30 -> 2
+            45 -> 3
+            60 -> 4
+            else -> 0
+        }
+        
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.sleep_timer))
+            .setSingleChoiceItems(times, currentSelection) { dialog, which ->
+                when (which) {
+                    0 -> cancelSleepTimer()
+                    1 -> setSleepTimer(15)
+                    2 -> setSleepTimer(30)
+                    3 -> setSleepTimer(45)
+                    4 -> setSleepTimer(60)
+                }
+                dialog.dismiss()
+            }
+            .show()
+    }
+
+    private fun setSleepTimer(minutes: Int) {
+        sleepTimeInMinutes = minutes
+        sleepTimer?.cancel()
+        ttsService?.updateCountdown(minutes)
+        
+        sleepTimer = Timer("SleepTimer").apply {
+            schedule(object : TimerTask() {
+                override fun run() {
+                    if (sleepTimeInMinutes <= 0) {
+                        runOnUiThread {
+                            if (isSpeaking) {
+                                stopReading()
+                            }
+                            sleepTimer?.cancel()
+                            sleepTimer = null
+                            ttsService?.updateCountdown(0)
+                            Toast.makeText(
+                                this@MainActivity,
+                                getString(R.string.sleep_timer_off),
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    } else {
+                        sleepTimeInMinutes--
+                    }
+                }
+            }, 0, TimeUnit.MINUTES.toMillis(1))
+        }
+        
+        // Only show toast for timer confirmation
+        Toast.makeText(
+            this,
+            getString(R.string.sleep_timer_set, minutes),
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    private fun cancelSleepTimer() {
+        sleepTimer?.cancel()
+        sleepTimer = null
+        sleepTimeInMinutes = 0
+        ttsService?.updateCountdown(0)  // Clear the countdown
+        Toast.makeText(
+            this,
+            getString(R.string.sleep_timer_off),
+            Toast.LENGTH_SHORT
+        ).show()
+    }
 }
+    

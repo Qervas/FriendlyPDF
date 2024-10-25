@@ -85,6 +85,15 @@
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@drawable/baseline_close_24"
                 android:contentDescription="Close"/>
+
+            <!-- Sleep timer button -->
+            <ImageButton
+                android:id="@+id/btnSleepTimer"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/sleep_timer"
+                android:src="@drawable/baseline_bedtime_24" />
         </LinearLayout>
 
         <!-- Audio progress bar -->

@@ -46,12 +46,16 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
 
-    // Replace the version catalog implementation with direct implementation
+    implementation("androidx.media:media:1.6.0")
+    implementation("androidx.media3:media3-session:1.2.1")
+    implementation("androidx.media3:media3-common:1.2.1")
+
     implementation("com.github.mhiew:android-pdf-viewer:3.2.0-beta.1")
     implementation(libs.androidx.room.common)
     implementation(libs.androidx.room.ktx)
     implementation(libs.androidx.core.animation)
     implementation(libs.androidx.preference.ktx)
+    implementation(libs.firebase.perf.ktx)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

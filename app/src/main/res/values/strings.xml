@@ -40,4 +40,8 @@
     <string name="toggle_theme">Toggle Theme</string>
     <string name="splash_image_description">Splash screen image</string>
     <string name="select_voice">Select Voice</string>
+    <string name="sleep_timer">Sleep Timer</string>
+    <string name="sleep_timer_off">Timer Off</string>
+    <string name="sleep_timer_set">Timer set for %1$d minutes</string>
+    <string name="sleep_timer_cancel">Cancel Timer</string>
 </resources>
