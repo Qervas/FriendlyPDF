@@ -543,21 +543,39 @@ class MainActivity : AppCompatActivity() {
 
                             override fun onDone(utteranceId: String) {
                                 Log.d("PDF_READER", "Finished utterance: $utteranceId")
+                                if (!isSpeaking) return  // Don't continue if stopped manually
+                                
                                 utteranceId.toIntOrNull()?.let { index ->
                                     if (index < sentences.size - 1) {
-                                        currentSentence = sentences[index + 1]
-                                        highlightCurrentSentence(currentSentence)
-                                        ttsService?.speak(currentSentence, TextToSpeech.QUEUE_FLUSH, null, (index + 1).toString())
+                                        // Continue with next sentence on current page
+                                        runOnUiThread {
+                                            currentSentence = sentences[index + 1]
+                                            highlightCurrentSentence(currentSentence)
+                                            ttsService?.speak(
+                                                currentSentence, 
+                                                TextToSpeech.QUEUE_FLUSH, 
+                                                null, 
+                                                (index + 1).toString()
+                                            )
+                                        }
                                     } else {
+                                        // Check for next page
                                         runOnUiThread {
                                             if (pdfView.currentPage < pdfView.pageCount - 1) {
+                                                // Move to next page
                                                 pdfView.jumpTo(pdfView.currentPage + 1)
                                                 lifecycleScope.launch {
-                                                    delay(500)
+                                                    delay(500) // Wait for page to load
                                                     readNextPage()
                                                 }
                                             } else {
+                                                // End of document reached
                                                 stopReading()
+                                                Toast.makeText(
+                                                    this@MainActivity,
+                                                    getString(R.string.reading_completed),
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
                                             }
                                         }
                                     }
@@ -566,6 +584,20 @@ class MainActivity : AppCompatActivity() {
 
                             override fun onError(utteranceId: String) {
                                 Log.e("PDF_READER", "Error with utterance $utteranceId")
+                                // Try to recover by moving to next sentence
+                                utteranceId.toIntOrNull()?.let { index ->
+                                    if (index < sentences.size - 1) {
+                                        runOnUiThread {
+                                            currentSentence = sentences[index + 1]
+                                            ttsService?.speak(
+                                                currentSentence,
+                                                TextToSpeech.QUEUE_FLUSH,
+                                                null,
+                                                (index + 1).toString()
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         })
                     } else {
@@ -616,9 +648,42 @@ class MainActivity : AppCompatActivity() {
                         currentReadingIndex = 0
                         currentSentence = sentences[0]
                         binding.mediaControls.audioProgress.progress = 0
-                        updateTimeRemaining() // Update fixed time for new page
+                        updateTimeRemaining()
                         highlightCurrentSentence(currentSentence)
-                        ttsService?.speak(currentSentence, TextToSpeech.QUEUE_FLUSH, null, "0")
+                        
+                        // Use the same speech parameters as in startReading
+                        val params = Bundle().apply {
+                            putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "0")
+                            putFloat("volume", volume)
+                            putFloat("pitch", pitch)
+                            putString(TextToSpeech.Engine.KEY_FEATURE_NETWORK_SYNTHESIS, "true")
+                            putString(TextToSpeech.Engine.KEY_PARAM_STREAM, 
+                                android.media.AudioManager.STREAM_MUSIC.toString())
+                        }
+
+                        val textToSpeak = if (ssmlEnabled) {
+                            formatWithSSML(currentSentence)
+                        } else {
+                            currentSentence
+                        }
+
+                        ttsService?.speak(textToSpeak, TextToSpeech.QUEUE_FLUSH, params, "0")
+                    }
+                } else {
+                    // If no sentences on this page, try next page
+                    withContext(Dispatchers.Main) {
+                        if (pdfView.currentPage < pdfView.pageCount - 1) {
+                            pdfView.jumpTo(pdfView.currentPage + 1)
+                            delay(500)
+                            readNextPage()
+                        } else {
+                            stopReading()
+                            Toast.makeText(
+                                this@MainActivity,
+                                getString(R.string.reading_completed),
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
                     }
                 }
             } catch (e: Exception) {

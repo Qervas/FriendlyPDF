@@ -20,6 +20,7 @@
     <string name="tts_init_failed">Text-to-speech initialization failed</string>
     <string name="processing_pdf">Processing PDF…</string>
     <string name="error_loading_last_pdf">Could not load the last opened PDF</string>
+    <string name="reading_completed">Reading completed</string>
     
     <!-- Speed Control -->
     <string name="reading_speed">Reading Speed</string>
